@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { i18n, langs, setLang, t, type Lang } from '../lib/i18n.svelte';
+	import { browser, i18n, langs, setLang, t, type Choice } from '../lib/i18n.svelte';
 </script>
 
-<select aria-label={t('settings.lang')} value={i18n.lang} onchange={e => setLang(e.currentTarget.value as Lang)}>
+<select aria-label={t('settings.lang')} value={i18n.choice} onchange={e => setLang(e.currentTarget.value as Choice)}>
+	<option value="auto">{t('settings.auto')} ({langs[browser()]})</option>
 	{#each Object.entries(langs) as [code, name] (code)}
 		<option value={code}>{name}</option>
 	{/each}

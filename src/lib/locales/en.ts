@@ -93,4 +93,5 @@ export default {
 	'preview.playing': 'Playing',
 	'notice.fxFailed': 'The background effect failed, so the camera is off.',
 	'lobby.reserved': 'This name is reserved. Pick another room name.',
+	'settings.auto': 'Automatic',
 } satisfies Record<keyof typeof ko, string>;

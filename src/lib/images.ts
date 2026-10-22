@@ -20,18 +20,24 @@ async function tx<T>(mode: IDBTransactionMode, f: (s: IDBObjectStore) => IDBRequ
 			d.close();
 			resolve(r ? r.result : undefined);
 		};
-		t.onerror = () => reject(t.error);
+		t.onerror = t.onabort = () => {
+			d.close();
+			reject(t.error ?? new DOMException('aborted', 'AbortError'));
+		};
 	});
+}
+
+// The single image older versions kept in localStorage. Runs before anything reads meet-bg-id.
+export async function migrate() {
+	const legacy = localStorage.getItem('meet-bg-image');
+	if (!legacy) return;
+	const id = await add(legacy);
+	localStorage.removeItem('meet-bg-image');
+	localStorage.setItem('meet-bg-id', id);
 }
 
 // Ids are creation times, so sorting them gives newest first.
 export async function list(): Promise<Image[]> {
-	const legacy = localStorage.getItem('meet-bg-image');
-	if (legacy) {
-		localStorage.removeItem('meet-bg-image');
-		const id = await add(legacy);
-		localStorage.setItem('meet-bg-id', id);
-	}
 	const all = (await tx<Image[]>('readonly', s => s.getAll())) ?? [];
 	return all.sort((a, b) => b.id.localeCompare(a.id));
 }

@@ -122,7 +122,10 @@ export class Meeting {
 			case 'change':
 				this.joined = true;
 				this.perms = perms;
-				if (!perms.includes('present')) Object.values(sc.up).forEach(s => s.close());
+				if (!perms.includes('present')) {
+					Object.values(sc.up).forEach(s => s.close());
+					this.want = { cam: false, mic: false };
+				}
 				sc.request({ '': ['audio', 'video-low'], screenshare: ['audio', 'video'] });
 				break;
 			case 'redirect':
@@ -166,11 +169,13 @@ export class Meeting {
 			// Any guest may send these kinds; only the server and operators are believed.
 			if (!privileged) return;
 			switch (kind) {
-			case 'error':
 			case 'kicked':
 				this.rejected = true;
 				this.waiting = message === NO_OP;
 				this.error = this.notice = server(String(message));
+				break;
+			case 'error':
+				this.notice = server(String(message));
 				break;
 			case 'warning':
 			case 'info':
@@ -179,6 +184,7 @@ export class Meeting {
 			case 'mute':
 				this.#up('camera')?.stream?.getAudioTracks().forEach(t => (t.enabled = false));
 				this.mic = false;
+				this.want.mic = false;
 				this.notice = t('notice.muted');
 				break;
 			case 'clearchat':
@@ -364,8 +370,9 @@ export class Meeting {
 		this.#meter(media);
 		let out = media;
 		let stop: (() => void) | undefined;
+		// A missing image falls back to blur; a failed effect sends no video rather than the room.
 		const url = this.background === 'image' && this.bgId ? await image(this.bgId).catch(() => null) : null;
-		if (video && (this.background === 'blur' || url)) {
+		if (video && (this.background === 'blur' || this.background === 'image')) {
 			try {
 				const { applyEffect } = await import('./background');
 				const fx = await applyEffect(
@@ -373,13 +380,24 @@ export class Meeting {
 					url ? { kind: 'image', image: await createImageBitmap(await (await fetch(url)).blob()) } : { kind: 'blur' },
 				);
 				out = fx.stream;
-				fx.ready.catch(this.#fail);
+				fx.ready.catch(() => {
+					this.notice = t('notice.fxFailed');
+					this.#serial(async () => {
+						if (this.#up('camera')?.userdata.source === media) await this.#camera(this.#audioLive(), false);
+					});
+				});
 				stop = () => {
 					fx.stop();
 					drop();
 				};
-			} catch (e) {
-				this.#fail(e);
+			} catch {
+				this.notice = t('notice.fxFailed');
+				media.getVideoTracks().forEach(tr => {
+					tr.stop();
+					media.removeTrack(tr);
+				});
+				video = false;
+				if (!audio) return;
 			}
 		}
 		if (!this.#alive) {

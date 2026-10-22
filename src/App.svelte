@@ -91,6 +91,17 @@
 		const tok = await token();
 		if (g !== gen) return;
 		if (member && !tok) {
+			// Leaving for SSO while offline would strand the user on an error page.
+			if (retry) {
+				const up = await fetch(`/group/${GROUP + room}/.status`, { signal: AbortSignal.timeout(5000) })
+					.then(r => r.ok)
+					.catch(() => false);
+				if (g !== gen) return;
+				if (!up) {
+					attempt++;
+					return;
+				}
+			}
 			// No refresh tokens for this client: go back through the SSO session.
 			login(room, media).catch(e => {
 				member = false;

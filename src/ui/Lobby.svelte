@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ROOM } from '../lib/config';
+	import { RESERVED, ROOM } from '../lib/config';
 	import { t } from '../lib/i18n.svelte';
 	import { support } from '../lib/support';
 	import Lang from './Lang.svelte';
@@ -48,6 +48,10 @@
 		room = room.trim().toLowerCase();
 		if (!ROOM.test(room)) {
 			msg = t('lobby.badRoom');
+			return;
+		}
+		if (RESERVED.has(room)) {
+			msg = t('lobby.reserved');
 			return;
 		}
 		localStorage.setItem('meet-av', JSON.stringify({ cam, mic }));

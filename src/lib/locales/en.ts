@@ -91,4 +91,6 @@ export default {
 	'react.circle-question-mark': 'Question',
 	'settings.remove': 'Remove',
 	'preview.playing': 'Playing',
+	'notice.fxFailed': 'The background effect failed, so the camera is off.',
+	'lobby.reserved': 'This name is reserved. Pick another room name.',
 } satisfies Record<keyof typeof ko, string>;

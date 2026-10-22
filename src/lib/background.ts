@@ -97,7 +97,10 @@ export async function applyEffect(
 	let gl = glRenderer(canvas, effect);
 	if (gl && video.videoWidth) {
 		const blank = await createImageBitmap(new ImageData(MASK, Math.round((MASK * video.videoHeight) / video.videoWidth)));
-		if (gl.bench(video, blank) > 25) gl = null;
+		if (gl.bench(video, blank) > 25) {
+			gl.dispose();
+			gl = null;
+		}
 		blank.close();
 	}
 	let render: (m: ImageBitmap) => void;
@@ -161,6 +164,7 @@ export async function applyEffect(
 		ready: w,
 		stop() {
 			stopped = true;
+			gl?.dispose();
 			ticker.terminate();
 			mask?.close();
 			track.stop();

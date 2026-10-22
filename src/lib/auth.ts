@@ -4,7 +4,8 @@ import { t } from './i18n.svelte';
 const PENDING = 'meet-login';
 const TOKENS = 'meet-tokens';
 
-type Tokens = { access: string; refresh?: string };
+// exp is local time: a skewed client clock must not make fresh tokens look expired.
+type Tokens = { access: string; refresh?: string; exp: number };
 
 function b64url(buf: ArrayBuffer | Uint8Array): string {
 	let s = '';
@@ -54,7 +55,8 @@ async function grant(body: Record<string, string>): Promise<string> {
 	const json = await res.json().catch(() => ({}));
 	if (!res.ok || !json.access_token)
 		throw new Error(json.error_description || json.error || `HTTP ${res.status}`);
-	sessionStorage.setItem(TOKENS, JSON.stringify({ access: json.access_token, refresh: json.refresh_token }));
+	const exp = Date.now() + (Number(json.expires_in) || 300) * 1000;
+	sessionStorage.setItem(TOKENS, JSON.stringify({ access: json.access_token, refresh: json.refresh_token, exp }));
 	return json.access_token;
 }
 
@@ -74,14 +76,6 @@ export async function callback(params: URLSearchParams): Promise<{ room: string;
 	return { room: saved.room, resume: saved.resume };
 }
 
-function expired(jwt: string): boolean {
-	try {
-		const { exp } = JSON.parse(atob(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-		return exp * 1000 < Date.now() + 30_000;
-	} catch {
-		return true;
-	}
-}
 
 export function loggedIn(): boolean {
 	return take<Tokens>(sessionStorage, TOKENS) !== null;
@@ -90,7 +84,7 @@ export function loggedIn(): boolean {
 export async function token(): Promise<string | null> {
 	const t = take<Tokens>(sessionStorage, TOKENS);
 	if (!t) return null;
-	if (!expired(t.access)) return t.access;
+	if (t.exp && t.exp > Date.now() + 30_000) return t.access;
 	if (t.refresh) {
 		try {
 			return await grant({ grant_type: 'refresh_token', refresh_token: t.refresh });

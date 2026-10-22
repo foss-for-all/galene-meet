@@ -26,7 +26,7 @@
 	$effect(() => {
 		const want = { audio: active && mic, video: active && cam };
 		const ids = { camId, micId };
-		const fx = want.video && support.effects && (bg === 'blur' || (bg === 'image' && bgId)) ? { id: bg === 'image' ? bgId : '' } : null;
+		const fx = want.video && support.effects && (bg === 'blur' || bg === 'image') ? { id: bg === 'image' ? bgId : '' } : null;
 		if (!want.audio && !want.video) return;
 		let gone = false;
 		let got: MediaStream | null = null;
@@ -40,11 +40,12 @@
 			.then(async s => {
 				got = s;
 				if (gone) return s.getTracks().forEach(tr => tr.stop());
-				let shown = s;
+				let shown: MediaStream | null = s;
+				let failed = false;
 				if (fx) {
 					try {
 						const { applyEffect } = await import('../lib/background');
-						const url = fx.id ? await image(fx.id) : null;
+						const url = fx.id ? await image(fx.id).catch(() => null) : null;
 						const out = await applyEffect(
 							s,
 							url ? { kind: 'image', image: await createImageBitmap(await (await fetch(url)).blob()) } : { kind: 'blur' },
@@ -52,11 +53,19 @@
 						if (gone) return out.stop();
 						stopFx = out.stop;
 						shown = out.stream;
-					} catch (e) {
-						console.error(e);
+						out.ready.catch(() => {
+							if (gone) return;
+							out.stop();
+							stream = null;
+							error = t('notice.fxFailed');
+						});
+					} catch {
+						failed = true;
+						shown = null;
 					}
 				}
-				error = '';
+				if (gone) return;
+				error = failed ? t('notice.fxFailed') : '';
 				stream = shown;
 				const a = s.getAudioTracks()[0];
 				lv = a ? analyse(a) : null;

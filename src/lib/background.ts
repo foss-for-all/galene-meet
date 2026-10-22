@@ -1,18 +1,43 @@
 export type Effect = { kind: 'blur' } | { kind: 'image'; image: ImageBitmap };
 
-let worker: Promise<Worker> | null = null;
+type Pending = { resolve: (v: any) => void; reject: (e: Error) => void };
 
-function call(w: Worker, msg: unknown, transfer: Transferable[] = []): Promise<any> {
+let worker: Promise<Worker> | null = null;
+const pending = new Map<number, Pending>();
+let seq = 0;
+
+function call(w: Worker, msg: object, transfer: Transferable[] = []): Promise<any> {
 	return new Promise((resolve, reject) => {
-		w.onmessage = e => (e.data.error ? reject(new Error(e.data.error)) : resolve(e.data));
-		w.postMessage(msg, transfer);
+		const id = ++seq;
+		pending.set(id, { resolve, reject });
+		w.postMessage({ ...msg, id }, transfer);
 	});
+}
+
+function fail(e: Error) {
+	for (const p of pending.values()) p.reject(e);
+	pending.clear();
 }
 
 function segmenter(): Promise<Worker> {
 	worker ??= (async () => {
 		const w = new Worker('/segment-worker.js');
-		await call(w, {});
+		w.onmessage = e => {
+			const p = pending.get(e.data.id);
+			pending.delete(e.data.id);
+			if (e.data.error) p?.reject(new Error(e.data.error));
+			else p?.resolve(e.data);
+		};
+		w.onerror = e => {
+			e.preventDefault();
+			fail(new Error(e.message || 'segmentation worker failed'));
+		};
+		try {
+			await call(w, {});
+		} catch (e) {
+			w.terminate();
+			throw e;
+		}
 		return w;
 	})().catch(e => {
 		worker = null;
@@ -79,6 +104,7 @@ export async function applyEffect(input: MediaStream, effect: Effect): Promise<{
 				resizeQuality: 'low',
 			});
 			const r = await call(w, { frame: f, time: performance.now() }, [f]);
+			if (stopped) return r.mask.close();
 			mask?.close();
 			mask = r.mask;
 		} catch (e) {

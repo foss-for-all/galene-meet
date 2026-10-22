@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Tile } from '../lib/meeting.svelte';
+	import { autoplay } from '../lib/autoplay.svelte';
 	import { t } from '../lib/i18n.svelte';
 	import Icon from './Icon.svelte';
 
@@ -21,7 +22,12 @@
 		muted={tile.local}
 		hidden={!video}
 		{@attach el => {
-			el.srcObject = tile.stream;
+			// Assigning srcObject restarts loading, even with the same stream.
+			if (el.srcObject !== tile.stream) el.srcObject = tile.stream;
+			if (tile.stream && !tile.local)
+				el.play().catch(e => {
+					if (e.name === 'NotAllowedError') autoplay.blocked = true;
+				});
 		}}
 	></video>
 	{#if !video}

@@ -41,13 +41,13 @@ onmessage = async e => {
 	try {
 		if (!e.data.frame) {
 			await load();
-			postMessage({ ready: true });
+			postMessage({ id: e.data.id });
 			return;
 		}
 		const m = await mask(e.data.frame, e.data.time);
-		postMessage({ mask: m }, [m]);
+		postMessage({ id: e.data.id, mask: m }, [m]);
 	} catch (err) {
-		postMessage({ error: String(err) });
+		postMessage({ id: e.data.id, error: String(err) });
 	} finally {
 		e.data.frame?.close();
 	}

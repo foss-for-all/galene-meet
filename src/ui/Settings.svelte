@@ -95,6 +95,10 @@
 
 <style>
 	dialog {
+		color-scheme: dark;
+		--bg: #181a20;
+		--fg: #fff;
+		--line: #3a3f4b;
 		width: min(26rem, 100% - 2rem);
 		border: none;
 		border-radius: .75rem;
@@ -119,6 +123,7 @@
 	}
 	select {
 		font: inherit;
+		font-size: 1rem;
 		font-weight: 400;
 		height: 2.5rem;
 		border-radius: .5rem;

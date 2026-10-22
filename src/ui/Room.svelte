@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { autoplay, resume } from '../lib/autoplay.svelte';
 	import { t, type Key } from '../lib/i18n.svelte';
 	import type { Meeting } from '../lib/meeting.svelte';
 	import { support } from '../lib/support';
@@ -16,6 +17,13 @@
 	const noRecord = $derived(meeting.perms.includes('record') ? null : ('why.record' as const));
 
 	let settings = $state(false);
+	let settingsButton: HTMLButtonElement;
+	let moreButton: HTMLButtonElement;
+
+	function closeSettings() {
+		settings = false;
+		(settingsButton.offsetParent ? settingsButton : moreButton).focus();
+	}
 	let more = $state(false);
 	let warning = $state('');
 	let layout = $state<'grid' | 'speaker'>('grid');
@@ -33,7 +41,7 @@
 	const toggle = (p: 'chat' | 'people') => (panel = panel === p ? null : p);
 
 	$effect(() => {
-		if (panel === 'chat') seen = meeting.messages.length;
+		if (panel === 'chat' || meeting.messages.length < seen) seen = meeting.messages.length;
 	});
 
 	$effect(() => {
@@ -50,12 +58,15 @@
 </script>
 
 {#if settings}
-	<Settings {meeting} onclose={() => (settings = false)} />
+	<Settings {meeting} onclose={closeSettings} />
 {/if}
 
 <div class="room">
 	{#if meeting.recording}
 		<p class="rec" role="status"><Icon name="circle-dot" />{t('room.recording')}</p>
+	{/if}
+	{#if autoplay.blocked}
+		<button class="unmute primary" onclick={resume}>{t('room.unmute')}</button>
 	{/if}
 	{#if meeting.notice}
 		<p class="notice" role="status">{meeting.notice}</p>
@@ -118,11 +129,11 @@
 			>
 				<Icon name="hand" />
 			</button>
-			<button title={t('tb.settings')} onclick={() => run(null, () => (settings = true))}>
+			<button bind:this={settingsButton} title={t('tb.settings')} onclick={() => run(null, () => (settings = true))}>
 				<Icon name="settings" />
 			</button>
 		</div>
-		<button class="more" aria-pressed={more} title={t('tb.more')} onclick={() => (more = !more)}>
+		<button bind:this={moreButton} class="more" aria-pressed={more} title={t('tb.more')} onclick={() => (more = !more)}>
 			<Icon name="ellipsis" />
 		</button>
 		<button aria-pressed={panel === 'people'} title={t('tb.people')} onclick={() => toggle('people')}>
@@ -141,6 +152,7 @@
 
 <style>
 	.room {
+		color-scheme: dark;
 		position: relative;
 		flex: 1;
 		min-height: 0;
@@ -263,6 +275,13 @@
 	.hands {
 		background: #fbbc04;
 		color: #111318;
+	}
+	.unmute {
+		position: absolute;
+		top: 1rem;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 2;
 	}
 	.notice,
 	.rec {

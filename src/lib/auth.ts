@@ -98,5 +98,11 @@ export async function token(): Promise<string | null> {
 }
 
 export function logout() {
+	const t = take<Tokens>(sessionStorage, TOKENS);
 	sessionStorage.removeItem(TOKENS);
+	if (t?.refresh)
+		fetch(`${SSO}/revoke`, {
+			method: 'POST',
+			body: new URLSearchParams({ client_id: CLIENT, token: t.refresh, token_type_hint: 'refresh_token' }),
+		}).catch(() => {});
 }

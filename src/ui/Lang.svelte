@@ -11,12 +11,12 @@
 <style>
 	select {
 		font: inherit;
-		font-size: .875rem;
+		font-size: 1rem;
 		height: 2.25rem;
 		border-radius: .5rem;
 		border: 1px solid var(--line);
 		padding: 0 .5rem;
-		background: transparent;
-		color: inherit;
+		background: var(--bg);
+		color: var(--fg);
 	}
 </style>

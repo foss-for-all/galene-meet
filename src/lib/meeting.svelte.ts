@@ -1,4 +1,3 @@
-import { applyEffect } from './background';
 import { ServerConnection, type Credentials, type Stream } from '../../vendor/galene/protocol.js';
 
 export type Tile = {
@@ -241,7 +240,12 @@ export class Meeting {
 		}
 		const media = await navigator.mediaDevices.getUserMedia({
 			audio: audio && (this.micId ? { deviceId: this.micId } : true),
-			video: video && (this.camId ? { deviceId: this.camId } : true),
+			video: video && {
+				deviceId: this.camId || undefined,
+				width: { ideal: 1280 },
+				height: { ideal: 720 },
+				frameRate: { ideal: 30, max: 30 },
+			},
 		});
 		media.getAudioTracks().forEach(t => (t.enabled = this.mic));
 		this.#meter(media);
@@ -250,6 +254,7 @@ export class Meeting {
 		const image = this.background === 'image' && this.bgImage;
 		if (video && (this.background === 'blur' || image)) {
 			try {
+				const { applyEffect } = await import('./background');
 				const fx = await applyEffect(
 					media,
 					image ? { kind: 'image', image: await createImageBitmap(await (await fetch(image)).blob()) } : { kind: 'blur' },

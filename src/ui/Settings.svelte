@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { loadImage } from '../lib/background';
 	import type { Meeting } from '../lib/meeting.svelte';
 
 	let { meeting, onclose }: { meeting: Meeting; onclose: () => void } = $props();
@@ -14,7 +13,9 @@
 
 	async function upload(e: Event) {
 		const file = (e.currentTarget as HTMLInputElement).files?.[0];
-		if (file) meeting.configure({ background: 'image', bgImage: await loadImage(file) });
+		if (!file) return;
+		const { loadImage } = await import('../lib/background');
+		meeting.configure({ background: 'image', bgImage: await loadImage(file) });
 	}
 </script>
 

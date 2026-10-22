@@ -26,29 +26,30 @@ function cover(ctx: CanvasRenderingContext2D, img: ImageBitmap, w: number, h: nu
 	ctx.drawImage(img, (w - img.width * s) / 2, (h - img.height * s) / 2, img.width * s, img.height * s);
 }
 
+const MASK = 256;
+const BLUR = 16;
+
 // The mask is opaque on the background: paint the effect there, then the camera frame behind it.
-function draw(ctx: CanvasRenderingContext2D, frame: ImageBitmap, mask: ImageBitmap, effect: Effect) {
-	const { width: w, height: h } = frame;
+function draw(ctx: CanvasRenderingContext2D, small: CanvasRenderingContext2D, video: HTMLVideoElement, mask: ImageBitmap, effect: Effect) {
+	const w = video.videoWidth;
+	const h = video.videoHeight;
 	if (ctx.canvas.width !== w || ctx.canvas.height !== h) {
 		ctx.canvas.width = w;
 		ctx.canvas.height = h;
+		small.canvas.width = Math.ceil(w / BLUR);
+		small.canvas.height = Math.ceil(h / BLUR);
 	}
 	ctx.globalCompositeOperation = 'copy';
-	ctx.filter = 'blur(2px)';
 	ctx.drawImage(mask, 0, 0, w, h);
-	ctx.filter = 'none';
 	ctx.globalCompositeOperation = 'source-in';
 	if (effect.kind === 'blur') {
-		ctx.drawImage(frame, 0, 0);
-		ctx.globalCompositeOperation = 'copy';
-		ctx.filter = `blur(${Math.round(w / 48)}px)`;
-		ctx.drawImage(ctx.canvas, 0, 0);
-		ctx.filter = 'none';
+		small.drawImage(video, 0, 0, small.canvas.width, small.canvas.height);
+		ctx.drawImage(small.canvas, 0, 0, w, h);
 	} else {
 		cover(ctx, effect.image, w, h);
 	}
 	ctx.globalCompositeOperation = 'destination-over';
-	ctx.drawImage(frame, 0, 0);
+	ctx.drawImage(video, 0, 0, w, h);
 	ctx.globalCompositeOperation = 'source-over';
 }
 
@@ -61,21 +62,36 @@ export async function applyEffect(input: MediaStream, effect: Effect): Promise<{
 	await video.play();
 
 	const ctx = document.createElement('canvas').getContext('2d')!;
+	const small = document.createElement('canvas').getContext('2d')!;
+	if ('filter' in small) small.filter = 'blur(1px)';
 	const track = ctx.canvas.captureStream().getVideoTracks()[0];
 	let stopped = false;
+	let mask: ImageBitmap | null = null;
+	let busy = false;
 
-	const frame = async () => {
-		if (stopped) return;
+	// Segmentation runs beside rendering: every camera frame is drawn with the latest mask.
+	const segment = async () => {
+		busy = true;
 		try {
-			const f = await createImageBitmap(video);
-			const copy = await createImageBitmap(f);
-			const { mask } = await call(w, { frame: f, time: performance.now() }, [f]);
-			if (!stopped) draw(ctx, copy, mask, effect);
-			copy.close();
-			mask.close();
+			const f = await createImageBitmap(video, {
+				resizeWidth: MASK,
+				resizeHeight: Math.round((MASK * video.videoHeight) / video.videoWidth),
+				resizeQuality: 'low',
+			});
+			const r = await call(w, { frame: f, time: performance.now() }, [f]);
+			mask?.close();
+			mask = r.mask;
 		} catch (e) {
 			console.error(e);
+		} finally {
+			busy = false;
 		}
+	};
+
+	const frame = () => {
+		if (stopped) return;
+		if (!busy) segment();
+		if (mask) draw(ctx, small, video, mask, effect);
 		video.requestVideoFrameCallback(frame);
 	};
 	video.requestVideoFrameCallback(frame);
@@ -84,6 +100,7 @@ export async function applyEffect(input: MediaStream, effect: Effect): Promise<{
 		stream: new MediaStream([track, ...input.getAudioTracks()]),
 		stop() {
 			stopped = true;
+			mask?.close();
 			track.stop();
 			video.srcObject = null;
 		},

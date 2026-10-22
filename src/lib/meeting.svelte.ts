@@ -1,4 +1,5 @@
 import { analyse, type Level } from './audio';
+import { get as image } from './images';
 import { t, type Key } from './i18n.svelte';
 import { ServerConnection, type Credentials, type Stream } from '../../vendor/galene/protocol.js';
 
@@ -72,7 +73,7 @@ export class Meeting {
 	camId = $state(localStorage.getItem('meet-cam') ?? '');
 	micId = $state(localStorage.getItem('meet-mic') ?? '');
 	background = $state(localStorage.getItem('meet-bg') ?? 'none');
-	bgImage = $state(localStorage.getItem('meet-bg-image') ?? '');
+	bgId = $state(localStorage.getItem('meet-bg-id') ?? '');
 	reactions = $state<{ id: number; name: string; icon: Reaction }[]>([]);
 	#reacted = 0;
 	speaking = $state<string[]>([]);
@@ -363,13 +364,13 @@ export class Meeting {
 		this.#meter(media);
 		let out = media;
 		let stop: (() => void) | undefined;
-		const image = this.background === 'image' && this.bgImage;
-		if (video && (this.background === 'blur' || image)) {
+		const url = this.background === 'image' && this.bgId ? await image(this.bgId).catch(() => null) : null;
+		if (video && (this.background === 'blur' || url)) {
 			try {
 				const { applyEffect } = await import('./background');
 				const fx = await applyEffect(
 					media,
-					image ? { kind: 'image', image: await createImageBitmap(await (await fetch(image)).blob()) } : { kind: 'blur' },
+					url ? { kind: 'image', image: await createImageBitmap(await (await fetch(url)).blob()) } : { kind: 'blur' },
 				);
 				out = fx.stream;
 				fx.ready.catch(this.#fail);
@@ -389,16 +390,12 @@ export class Meeting {
 		this.cam = video;
 	}
 
-	async configure(o: { camId?: string; micId?: string; background?: string; bgImage?: string }) {
+	async configure(o: { camId?: string; micId?: string; background?: string; bgId?: string }) {
 		Object.assign(this, o);
 		localStorage.setItem('meet-cam', this.camId);
 		localStorage.setItem('meet-mic', this.micId);
 		localStorage.setItem('meet-bg', this.background);
-		try {
-			localStorage.setItem('meet-bg-image', this.bgImage);
-		} catch {
-			this.notice = t('notice.bgTooBig');
-		}
+		localStorage.setItem('meet-bg-id', this.bgId);
 		const device = 'camId' in o || 'micId' in o;
 		await this.#serial(async () => {
 			if (this.#up('camera')) await this.#camera(this.#audioLive(), this.cam, device);

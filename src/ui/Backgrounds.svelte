@@ -1,30 +1,51 @@
 <script lang="ts">
+	import { add, list, remove, type Image } from '../lib/images';
 	import { t } from '../lib/i18n.svelte';
 	import { support } from '../lib/support';
 	import Icon from './Icon.svelte';
 
 	let {
 		value,
-		image,
+		selected,
 		onchange,
-	}: { value: string; image: string; onchange: (o: { background?: string; bgImage?: string }) => void } = $props();
+	}: { value: string; selected: string; onchange: (o: { background?: string; bgId?: string }) => void } = $props();
 
+	let images = $state<Image[]>([]);
 	let warned = $state(false);
+	let loading = $state(false);
 
-	function pick(background: string) {
+	const reload = () => list().then(l => (images = l)).catch(() => {});
+	reload();
+
+	function pick(background: string, bgId?: string) {
 		if (background !== 'none' && !support.effects) warned = true;
-		else onchange({ background });
+		else onchange(bgId === undefined ? { background } : { background, bgId });
 	}
 
 	async function upload(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
 		if (!support.effects) {
 			warned = true;
 			return;
 		}
-		const file = (e.currentTarget as HTMLInputElement).files?.[0];
 		if (!file) return;
-		const { loadImage } = await import('../lib/background');
-		onchange({ background: 'image', bgImage: await loadImage(file) });
+		loading = true;
+		try {
+			const { loadImage } = await import('../lib/background');
+			const bgId = await add(await loadImage(file));
+			await reload();
+			onchange({ background: 'image', bgId });
+		} finally {
+			loading = false;
+		}
+	}
+
+	async function drop(id: string) {
+		await remove(id);
+		await reload();
+		if (id === selected) onchange({ background: value === 'image' ? 'none' : value, bgId: '' });
 	}
 </script>
 
@@ -41,21 +62,25 @@
 		>
 			{t('settings.blur')}
 		</button>
-		{#if image}
-			<button
-				type="button"
-				class="thumb"
-				aria-pressed={value === 'image'}
-				style:background-image="url({image})"
-				title={t('settings.image')}
-				aria-label={t('settings.image')}
-				aria-disabled={!support.effects}
-				onclick={() => pick('image')}
-			></button>
-		{/if}
-		<label class="upload" aria-disabled={!support.effects}>
+		{#each images as im (im.id)}
+			<div class="thumb">
+				<button
+					type="button"
+					aria-pressed={value === 'image' && selected === im.id}
+					style:background-image="url({im.url})"
+					title={t('settings.image')}
+					aria-label={t('settings.image')}
+					aria-disabled={!support.effects}
+					onclick={() => pick('image', im.id)}
+				></button>
+				<button type="button" class="remove" title={t('settings.remove')} aria-label={t('settings.remove')} onclick={() => drop(im.id)}>
+					<Icon name="x" />
+				</button>
+			</div>
+		{/each}
+		<label class="upload" class:loading aria-disabled={!support.effects || loading}>
 			{t('settings.upload')}
-			<input type="file" accept="image/*" onchange={upload} />
+			<input type="file" accept="image/*" disabled={loading} onchange={upload} />
 		</label>
 	</div>
 	{#if warned || !support.effects}
@@ -81,6 +106,7 @@
 	}
 	.bg button,
 	.upload {
+		width: 100%;
 		height: 3rem;
 		padding: 0 .5rem;
 		text-align: center;
@@ -94,13 +120,36 @@
 	}
 	.bg button[aria-pressed='true'] {
 		border-color: var(--accent);
+		box-shadow: 0 0 0 1px var(--accent);
 	}
 	.thumb {
+		position: relative;
+	}
+	.thumb > button:first-child {
 		background-size: cover;
 		background-position: center;
 	}
+	.bg .remove {
+		position: absolute;
+		top: -.375rem;
+		right: -.375rem;
+		width: 1.375rem;
+		height: 1.375rem;
+		padding: 0;
+		border: none;
+		border-radius: 50%;
+		background: #2d313b;
+		color: #fff;
+	}
+	.remove :global(svg) {
+		width: .875rem;
+		height: .875rem;
+	}
 	.upload input {
 		display: none;
+	}
+	.loading {
+		opacity: .5;
 	}
 	.warn {
 		display: flex;

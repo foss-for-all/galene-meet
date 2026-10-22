@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { analyse, chime, type Level } from '../lib/audio';
+	import { get as image } from '../lib/images';
 	import { t } from '../lib/i18n.svelte';
 	import { support } from '../lib/support';
 	import Backgrounds from './Backgrounds.svelte';
@@ -16,7 +17,8 @@
 	let camId = $state(localStorage.getItem('meet-cam') ?? '');
 	let micId = $state(localStorage.getItem('meet-mic') ?? '');
 	let bg = $state(localStorage.getItem('meet-bg') ?? 'none');
-	let bgImage = $state(localStorage.getItem('meet-bg-image') ?? '');
+	let bgId = $state(localStorage.getItem('meet-bg-id') ?? '');
+	let playing = $state(false);
 	let stream = $state<MediaStream | null>(null);
 	let level = $state<Level | null>(null);
 	let error = $state('');
@@ -24,8 +26,7 @@
 	$effect(() => {
 		const want = { audio: active && mic, video: active && cam };
 		const ids = { camId, micId };
-		const image = bg === 'image' && bgImage;
-		const fx = want.video && support.effects && (bg === 'blur' || image) ? { image } : null;
+		const fx = want.video && support.effects && (bg === 'blur' || (bg === 'image' && bgId)) ? { id: bg === 'image' ? bgId : '' } : null;
 		if (!want.audio && !want.video) return;
 		let gone = false;
 		let got: MediaStream | null = null;
@@ -43,9 +44,10 @@
 				if (fx) {
 					try {
 						const { applyEffect } = await import('../lib/background');
+						const url = fx.id ? await image(fx.id) : null;
 						const out = await applyEffect(
 							s,
-							fx.image ? { kind: 'image', image: await createImageBitmap(await (await fetch(fx.image)).blob()) } : { kind: 'blur' },
+							url ? { kind: 'image', image: await createImageBitmap(await (await fetch(url)).blob()) } : { kind: 'blur' },
 						);
 						if (gone) return out.stop();
 						stopFx = out.stop;
@@ -73,16 +75,15 @@
 		};
 	});
 
-	function background(o: { background?: string; bgImage?: string }) {
+	function background(o: { background?: string; bgId?: string }) {
 		if (o.background !== undefined) localStorage.setItem('meet-bg', (bg = o.background));
-		if (o.bgImage !== undefined) {
-			bgImage = o.bgImage;
-			try {
-				localStorage.setItem('meet-bg-image', bgImage);
-			} catch {
-				error = t('notice.bgTooBig');
-			}
-		}
+		if (o.bgId !== undefined) localStorage.setItem('meet-bg-id', (bgId = o.bgId));
+	}
+
+	function test() {
+		if (playing) return;
+		playing = true;
+		setTimeout(() => (playing = false), chime());
 	}
 
 	function pick(o: { camId?: string; micId?: string }) {
@@ -119,12 +120,12 @@
 	{#if level}
 		<Meter read={level.read} />
 	{/if}
-	<Backgrounds value={bg} image={bgImage} onchange={background} />
+	<Backgrounds value={bg} selected={bgId} onchange={background} />
 	<details>
 		<summary>{t('preview.devices')}</summary>
 		<div class="devices">
 			<Devices {camId} {micId} onchange={pick} />
-			<button type="button" onclick={() => chime()}>{t('preview.speaker')}</button>
+			<button type="button" class:playing aria-pressed={playing} onclick={test}>{t(playing ? 'preview.playing' : 'preview.speaker')}</button>
 		</div>
 	</details>
 </section>
@@ -178,6 +179,11 @@
 	}
 	.controls .off {
 		background: var(--danger);
+	}
+	.playing {
+		background: var(--accent);
+		border-color: var(--accent);
+		color: var(--accent-fg);
 	}
 	summary {
 		cursor: pointer;

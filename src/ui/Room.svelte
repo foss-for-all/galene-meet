@@ -316,7 +316,7 @@
 		position: absolute;
 		top: 1rem;
 		left: 50%;
-		transform: translateX(-50%);
+		translate: -50% 0;
 		z-index: 2;
 	}
 	.notice,

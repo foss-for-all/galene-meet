@@ -28,7 +28,8 @@ export function analyse(track: MediaStreamTrack): Level {
 	};
 }
 
-export function chime(sinkId = '') {
+// Returns how long the sound plays, in milliseconds.
+export function chime(sinkId = ''): number {
 	const c = context();
 	const out = c.createMediaStreamDestination();
 	const el = new Audio();
@@ -48,4 +49,5 @@ export function chime(sinkId = '') {
 		o.stop(now + i * 0.18 + 0.55);
 	});
 	setTimeout(() => (el.srcObject = null), 1500);
+	return 1100;
 }

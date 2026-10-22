@@ -21,7 +21,7 @@
 	{#if meeting.mic}
 		<Meter read={() => meeting.level()} />
 	{/if}
-	<Backgrounds value={meeting.background} image={meeting.bgImage} onchange={o => meeting.configure(o)} />
+	<Backgrounds value={meeting.background} selected={meeting.bgId} onchange={o => meeting.configure(o)} />
 	<label>
 		{t('settings.lang')}
 		<Lang />

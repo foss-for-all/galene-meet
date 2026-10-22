@@ -58,7 +58,6 @@ export default {
 	'tile.pin': '고정',
 	'tile.unpin': '고정 해제',
 	'notice.muted': '진행자가 마이크를 껐습니다.',
-	'notice.bgTooBig': '배경 이미지가 너무 커서 기억하지 못합니다.',
 	'err.denied': '카메라나 마이크 사용이 거부되었습니다. 브라우저 권한을 확인하세요.',
 	'err.noDevice': '카메라나 마이크를 찾지 못했습니다.',
 	'err.busy': '다른 앱이 카메라나 마이크를 쓰고 있습니다.',
@@ -88,4 +87,6 @@ export default {
 	'react.laugh': '웃음',
 	'react.party-popper': '축하',
 	'react.circle-question-mark': '질문',
+	'settings.remove': '삭제',
+	'preview.playing': '재생 중',
 };

@@ -60,7 +60,6 @@ export default {
 	'tile.pin': 'Pin',
 	'tile.unpin': 'Unpin',
 	'notice.muted': 'A moderator muted your microphone.',
-	'notice.bgTooBig': 'The background image is too large to remember.',
 	'err.denied': 'Camera or microphone access was denied. Check the browser permissions.',
 	'err.noDevice': 'No camera or microphone found.',
 	'err.busy': 'Another app is using the camera or microphone.',
@@ -90,4 +89,6 @@ export default {
 	'react.laugh': 'Laugh',
 	'react.party-popper': 'Celebrate',
 	'react.circle-question-mark': 'Question',
+	'settings.remove': 'Remove',
+	'preview.playing': 'Playing',
 } satisfies Record<keyof typeof ko, string>;

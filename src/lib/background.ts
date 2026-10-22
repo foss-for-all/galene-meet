@@ -89,17 +89,26 @@ export async function applyEffect(input: MediaStream, effect: Effect): Promise<{
 	};
 
 	const frame = () => {
-		if (stopped) return;
 		if (!busy) segment();
 		if (mask) draw(ctx, small, video, mask, effect);
-		video.requestVideoFrameCallback(frame);
 	};
-	video.requestVideoFrameCallback(frame);
+	const loop = () => {
+		if (stopped) return;
+		frame();
+		video.requestVideoFrameCallback(loop);
+	};
+	video.requestVideoFrameCallback(loop);
+	// Hidden tabs get no video frame callbacks; worker timers keep running.
+	const ticker = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 33)'])));
+	ticker.onmessage = () => {
+		if (document.hidden && !stopped) frame();
+	};
 
 	return {
 		stream: new MediaStream([track, ...input.getAudioTracks()]),
 		stop() {
 			stopped = true;
+			ticker.terminate();
 			mask?.close();
 			track.stop();
 			video.srcObject = null;

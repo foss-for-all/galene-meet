@@ -82,4 +82,10 @@ export default {
 	'preview.speaker': '스피커 테스트음 재생',
 	'reconnect.title': '다시 연결하는 중입니다',
 	'reconnect.body': '연결이 끊겼습니다. 자동으로 다시 들어갑니다.',
+	'tb.react': '반응',
+	'react.thumbs-up': '좋아요',
+	'react.heart': '하트',
+	'react.laugh': '웃음',
+	'react.party-popper': '축하',
+	'react.circle-question-mark': '질문',
 };

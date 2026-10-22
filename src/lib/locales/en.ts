@@ -84,4 +84,10 @@ export default {
 	'preview.speaker': 'Play test sound',
 	'reconnect.title': 'Reconnecting',
 	'reconnect.body': 'The connection dropped. You will rejoin automatically.',
+	'tb.react': 'React',
+	'react.thumbs-up': 'Thumbs up',
+	'react.heart': 'Heart',
+	'react.laugh': 'Laugh',
+	'react.party-popper': 'Celebrate',
+	'react.circle-question-mark': 'Question',
 } satisfies Record<keyof typeof ko, string>;

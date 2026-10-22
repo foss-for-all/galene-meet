@@ -45,6 +45,9 @@ function server(msg: string) {
 	return SERVER[msg] ? t(SERVER[msg]) : msg;
 }
 
+export const REACTIONS = ['thumbs-up', 'heart', 'laugh', 'party-popper', 'circle-question-mark'] as const;
+export type Reaction = (typeof REACTIONS)[number];
+
 export type Person = {
 	id: string;
 	name: string;
@@ -70,6 +73,8 @@ export class Meeting {
 	micId = $state(localStorage.getItem('meet-mic') ?? '');
 	background = $state(localStorage.getItem('meet-bg') ?? 'none');
 	bgImage = $state(localStorage.getItem('meet-bg-image') ?? '');
+	reactions = $state<{ id: number; name: string; icon: Reaction }[]>([]);
+	#reacted = 0;
 	speaking = $state<string[]>([]);
 	speaker = $state<string | null>(null);
 	#v = $state(0);
@@ -152,7 +157,11 @@ export class Meeting {
 				private: !!dest,
 			});
 		};
-		sc.onusermessage = (_id, _dest, _username, _time, privileged, kind, _error, message) => {
+		sc.onusermessage = (_id, _dest, username, _time, privileged, kind, _error, message) => {
+			if (kind === 'reaction') {
+				if (REACTIONS.includes(message as Reaction)) this.#show(username, message as Reaction);
+				return;
+			}
 			// Any guest may send these kinds; only the server and operators are believed.
 			if (!privileged) return;
 			switch (kind) {
@@ -212,6 +221,19 @@ export class Meeting {
 			s.userdata.want = want;
 			s.request(['audio', want]);
 		}
+	}
+
+	react(icon: Reaction) {
+		const now = Date.now();
+		if (now - this.#reacted < 300) return;
+		this.#reacted = now;
+		this.sc.userMessage('reaction', '', icon);
+	}
+
+	#show(name: string, icon: Reaction) {
+		const r = { id: Math.random(), name, icon };
+		this.reactions = [...this.reactions.slice(-19), r];
+		setTimeout(() => (this.reactions = this.reactions.filter(x => x !== r)), 4000);
 	}
 
 	send(text: string) {

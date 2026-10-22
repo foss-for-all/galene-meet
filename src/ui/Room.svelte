@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { autoplay, resume } from '../lib/autoplay.svelte';
 	import { t, type Key } from '../lib/i18n.svelte';
-	import type { Meeting } from '../lib/meeting.svelte';
+	import { REACTIONS, type Meeting } from '../lib/meeting.svelte';
 	import { support } from '../lib/support';
 	import Chat from './Chat.svelte';
 	import Icon from './Icon.svelte';
 	import Meter from './Meter.svelte';
 	import People from './People.svelte';
+	import Reactions from './Reactions.svelte';
 	import Settings from './Settings.svelte';
 	import Stage from './Stage.svelte';
 
@@ -26,6 +27,7 @@
 		(settingsButton.offsetParent ? settingsButton : moreButton).focus();
 	}
 	let more = $state(false);
+	let reacting = $state(false);
 	let warning = $state('');
 	let layout = $state<'grid' | 'speaker'>('grid');
 	let panel = $state<'chat' | 'people' | null>(null);
@@ -74,6 +76,7 @@
 	{/if}
 	<div class="stage">
 		<Stage {meeting} {layout} />
+		<Reactions {meeting} />
 		{#if panel === 'chat'}
 			<Chat {meeting} />
 		{:else if panel === 'people'}
@@ -81,6 +84,15 @@
 		{/if}
 	</div>
 	<nav>
+		{#if reacting}
+			<div class="reacts" role="group" aria-label={t('tb.react')}>
+				{#each REACTIONS as r (r)}
+					<button title={t(`react.${r}`)} aria-label={t(`react.${r}`)} onclick={() => meeting.react(r)}>
+						<Icon name={r} />
+					</button>
+				{/each}
+			</div>
+		{/if}
 		{#if warning}
 			<p class="warning" role="alert"><Icon name="triangle-alert" />{warning}</p>
 		{/if}
@@ -123,6 +135,9 @@
 				onclick={() => run(null, () => (layout = layout === 'grid' ? 'speaker' : 'grid'))}
 			>
 				<Icon name={layout === 'grid' ? 'user-square' : 'layout-grid'} />
+			</button>
+			<button aria-pressed={reacting} title={t('tb.react')} onclick={() => run(null, () => (reacting = !reacting))}>
+				<Icon name="smile-plus" />
 			</button>
 			<button
 				aria-pressed={meeting.hand}
@@ -260,6 +275,19 @@
 		background: #2e2610;
 		color: #ffe08a;
 		font-size: .875rem;
+		box-shadow: 0 .5rem 1.5rem rgb(0 0 0 / .4);
+	}
+	.reacts {
+		position: absolute;
+		bottom: 100%;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 3;
+		display: flex;
+		gap: .25rem;
+		padding: .375rem;
+		border-radius: 1.75rem;
+		background: #1f2229;
 		box-shadow: 0 .5rem 1.5rem rgb(0 0 0 / .4);
 	}
 	.level {

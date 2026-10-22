@@ -8,7 +8,7 @@
 	import Room from './ui/Room.svelte';
 	import Waiting from './ui/Waiting.svelte';
 
-	const RETRY = 5000;
+	const RETRY = { wait: 5000, reconnect: 2000 };
 
 	// Any path becomes a valid room name, so links like /Weekly_Sync still work.
 	function normalize(path: string) {
@@ -25,7 +25,7 @@
 	let meeting = $state<Meeting | null>(null);
 	let name = '';
 	let media = { cam: false, mic: false };
-	let waiting = $state(false);
+	let retry = $state<'wait' | 'reconnect' | null>(null);
 	let ended = $state(false);
 	let attempt = $state(0);
 	let gen = 0;
@@ -48,29 +48,34 @@
 
 	$effect(() => {
 		if (!meeting?.joined) return;
-		waiting = false;
+		retry = null;
 		meeting.start(media);
 	});
 
 	$effect(() => {
 		if (!meeting?.closed) return;
+		if (meeting.joined) media = meeting.want;
 		if (meeting.waiting && !member) {
 			ended ||= meeting.joined;
-			waiting = true;
+			retry = 'wait';
 			attempt++;
-		} else if (waiting && !meeting.rejected) {
+		} else if (retry && !meeting.rejected) {
+			attempt++;
+		} else if (meeting.joined && !meeting.rejected && !meeting.left) {
+			retry = 'reconnect';
 			attempt++;
 		} else {
-			error = meeting.error || (waiting ? t('err.connection') : '');
-			waiting = ended = false;
+			error = meeting.error || (retry ? t('err.connection') : '');
+			retry = null;
+			ended = false;
 		}
 		meeting = null;
 	});
 
 	$effect(() => {
-		if (!waiting) return;
+		if (!retry) return;
 		attempt;
-		const id = setTimeout(() => join(name), RETRY);
+		const id = setTimeout(() => join(name), RETRY[retry]);
 		return () => clearTimeout(id);
 	});
 
@@ -80,12 +85,12 @@
 		name = n;
 		media = want;
 		error = '';
-		if (!waiting) ended = false;
+		if (!retry) ended = false;
 		const tok = await token();
 		if (g !== gen) return;
 		if (member && !tok) {
 			member = false;
-			waiting = false;
+			retry = null;
 			error = t('auth.expired');
 			return;
 		}
@@ -97,14 +102,15 @@
 		} catch (e) {
 			if (g !== gen) return;
 			meeting = null;
-			if (waiting) attempt++;
+			if (retry) attempt++;
 			else error = e instanceof Error ? e.message : String(e);
 		}
 	}
 
 	function cancel() {
 		gen++;
-		waiting = ended = false;
+		retry = null;
+		ended = false;
 		meeting?.leave();
 		meeting = null;
 	}
@@ -114,8 +120,8 @@
 
 {#if meeting?.joined}
 	<Room {meeting} />
-{:else if waiting}
-	<Waiting {room} {ended} {member} onlogin={signin} oncancel={cancel} />
+{:else if retry}
+	<Waiting {room} mode={retry === 'reconnect' ? 'reconnect' : ended ? 'ended' : 'wait'} {member} onlogin={signin} oncancel={cancel} />
 {:else}
 	<Lobby
 		bind:room

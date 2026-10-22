@@ -82,4 +82,6 @@ export default {
 	'preview.off': 'Camera is off',
 	'preview.devices': 'Devices and sound check',
 	'preview.speaker': 'Play test sound',
+	'reconnect.title': 'Reconnecting',
+	'reconnect.body': 'The connection dropped. You will rejoin automatically.',
 } satisfies Record<keyof typeof ko, string>;

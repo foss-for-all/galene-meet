@@ -5,11 +5,17 @@
 
 	let {
 		room,
-		ended,
+		mode,
 		member,
 		onlogin,
 		oncancel,
-	}: { room: string; ended: boolean; member: boolean; onlogin: () => void; oncancel: () => void } = $props();
+	}: {
+		room: string;
+		mode: 'wait' | 'ended' | 'reconnect';
+		member: boolean;
+		onlogin: () => void;
+		oncancel: () => void;
+	} = $props();
 
 	let copied = $state(false);
 	const link = $derived(`${location.origin}/${room}`);
@@ -23,14 +29,14 @@
 
 <main>
 	<div class="logo"><Logo /></div>
-	<h1>{t('wait.title')}</h1>
-	<p>{t(ended ? 'wait.ended' : 'wait.body')}</p>
+	<h1>{t(mode === 'reconnect' ? 'reconnect.title' : 'wait.title')}</h1>
+	<p>{t(mode === 'reconnect' ? 'reconnect.body' : mode === 'ended' ? 'wait.ended' : 'wait.body')}</p>
 	<div class="link">
 		<code>{link}</code>
 		<button onclick={copy}>{t(copied ? 'wait.copied' : 'wait.copy')}</button>
 	</div>
 	<div class="row">
-		{#if !member}
+		{#if !member && mode !== 'reconnect'}
 			<button class="primary" onclick={onlogin}>{t('lobby.login')}</button>
 		{/if}
 		<button onclick={oncancel}>{t('wait.cancel')}</button>

@@ -78,6 +78,8 @@ export class Meeting {
 	#timer = 0;
 	#left = false;
 	#queue: Promise<unknown> = Promise.resolve();
+	// What the user asked for, kept across a dropped connection.
+	want = { cam: false, mic: false };
 
 	tiles = $derived.by(() => {
 		this.#v;
@@ -217,6 +219,10 @@ export class Meeting {
 		else this.sc.chat('', '', text);
 	}
 
+	get left() {
+		return this.#left;
+	}
+
 	leave() {
 		this.#left = true;
 		this.error = '';
@@ -276,7 +282,12 @@ export class Meeting {
 
 	// Camera changes run one at a time, each reading the state the previous one left.
 	#serial(f: () => Promise<void>): Promise<void> {
-		const p = this.#queue.then(f).catch(this.#fail);
+		const p = this.#queue
+			.then(f)
+			.catch(this.#fail)
+			.then(() => {
+				if (this.#alive) this.want = { cam: this.cam, mic: this.mic };
+			});
 		this.#queue = p;
 		return p;
 	}

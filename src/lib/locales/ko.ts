@@ -80,4 +80,6 @@ export default {
 	'preview.off': '카메라가 꺼져 있습니다',
 	'preview.devices': '장치와 소리 테스트',
 	'preview.speaker': '스피커 테스트음 재생',
+	'reconnect.title': '다시 연결하는 중입니다',
+	'reconnect.body': '연결이 끊겼습니다. 자동으로 다시 들어갑니다.',
 };

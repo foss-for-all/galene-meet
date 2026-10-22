@@ -39,7 +39,13 @@ export class Meeting {
 	cam = $state(false);
 	screen = $state(false);
 	messages = $state<Message[]>([]);
+	speaking = $state<string[]>([]);
+	speaker = $state<string | null>(null);
 	#v = $state(0);
+	#last = new Map<string, number>();
+	#audio: AudioContext | null = null;
+	#analyser: AnalyserNode | null = null;
+	#timer = 0;
 
 	tiles = $derived.by(() => {
 		this.#v;
@@ -96,6 +102,7 @@ export class Meeting {
 		sc.ondownstream = s => {
 			s.ondowntrack = bump;
 			s.onclose = bump;
+			s.setStatsInterval(300);
 		};
 		sc.onchat = (id, source, dest, username, time, _privileged, _history, kind, message) => {
 			this.messages.push({
@@ -129,10 +136,42 @@ export class Meeting {
 			this.error = e instanceof Error ? e.message : String(e);
 		};
 		sc.onclose = () => {
+			clearInterval(this.#timer);
+			this.#audio?.close();
 			this.closed = true;
 			bump();
 		};
 		sc.connect(endpoint);
+		this.#timer = setInterval(() => this.#detect(), 300);
+	}
+
+	#heard(user: string) {
+		this.#last.set(user, Date.now());
+		if (user !== this.sc.id) this.speaker = user;
+	}
+
+	#detect() {
+		for (const s of Object.values(this.sc.down)) {
+			const loud = Object.values(s.stats).some(t => t['inbound-rtp']?.audioEnergy > 0.04);
+			if (loud && s.source) this.#heard(s.source);
+		}
+		if (this.#analyser && this.mic) {
+			const buf = new Float32Array(this.#analyser.fftSize);
+			this.#analyser.getFloatTimeDomainData(buf);
+			if (Math.sqrt(buf.reduce((a, x) => a + x * x, 0) / buf.length) > 0.03) this.#heard(this.sc.id);
+		}
+		const now = Date.now();
+		const list = [...this.#last].filter(([, t]) => now - t < 700).map(([u]) => u).sort();
+		if (list.join() !== this.speaking.join()) this.speaking = list;
+	}
+
+	quality(main: string | null, all: boolean) {
+		for (const s of Object.values(this.sc.down)) {
+			const want = all || s.id === main || s.label === 'screenshare' ? 'video' : 'video-low';
+			if (s.userdata.want === want) continue;
+			s.userdata.want = want;
+			s.request(['audio', want]);
+		}
 	}
 
 	send(text: string) {
@@ -196,8 +235,18 @@ export class Meeting {
 		}
 		const media = await navigator.mediaDevices.getUserMedia({ audio, video });
 		media.getAudioTracks().forEach(t => (t.enabled = this.mic));
+		this.#meter(media);
 		this.#publish('camera', media, old);
 		this.cam = video;
+	}
+
+	#meter(media: MediaStream) {
+		this.#analyser = null;
+		const track = media.getAudioTracks()[0];
+		if (!track) return;
+		this.#audio ??= new AudioContext();
+		this.#analyser = this.#audio.createAnalyser();
+		this.#audio.createMediaStreamSource(new MediaStream([track])).connect(this.#analyser);
 	}
 
 	#fail = (e: unknown) => {

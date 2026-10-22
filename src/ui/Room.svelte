@@ -1,15 +1,16 @@
 <script lang="ts">
 	import type { Meeting } from '../lib/meeting.svelte';
 	import Chat from './Chat.svelte';
-	import Grid from './Grid.svelte';
 	import Icon from './Icon.svelte';
 	import People from './People.svelte';
+	import Stage from './Stage.svelte';
 
 	let { meeting }: { meeting: Meeting } = $props();
 
 	const present = $derived(meeting.perms.includes('present'));
 	const canRecord = $derived(meeting.perms.includes('record'));
 
+	let layout = $state<'grid' | 'speaker'>('grid');
 	let panel = $state<'chat' | 'people' | null>(null);
 	let seen = $state(0);
 	const unread = $derived(panel === 'chat' ? 0 : meeting.messages.length - seen);
@@ -36,7 +37,7 @@
 		<p class="notice" role="status">{meeting.notice}</p>
 	{/if}
 	<div class="stage">
-		<Grid tiles={meeting.tiles} />
+		<Stage {meeting} {layout} />
 		{#if panel === 'chat'}
 			<Chat {meeting} />
 		{:else if panel === 'people'}
@@ -60,6 +61,12 @@
 				<Icon name="circle-dot" />
 			</button>
 		{/if}
+		<button
+			title={layout === 'grid' ? '발화자 보기' : '타일 보기'}
+			onclick={() => (layout = layout === 'grid' ? 'speaker' : 'grid')}
+		>
+			<Icon name={layout === 'grid' ? 'user-square' : 'layout-grid'} />
+		</button>
 		<button aria-pressed={meeting.hand} title={meeting.hand ? '손 내리기' : '손 들기'} onclick={() => meeting.raiseHand()}>
 			<Icon name="hand" />
 		</button>

@@ -84,6 +84,7 @@ export class Stream {
 	pc: RTCPeerConnection;
 	stream: MediaStream | null;
 	label: string | null;
+	stats: Record<string, any>;
 	userdata: Record<string, any>;
 	onclose: ((this: Stream, replace: boolean) => void) | null;
 	onerror: ((this: Stream, error: unknown) => void) | null;

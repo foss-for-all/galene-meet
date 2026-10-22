@@ -19,7 +19,9 @@
 		return s.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64).replace(/-+$/, '');
 	}
 
-	let room = $state(normalize(location.pathname));
+	const params = new URLSearchParams(location.search);
+	// Old portal links: /?room=<name>.
+	let room = $state(normalize(location.pathname === '/' && params.has('room') ? '/' + params.get('room') : location.pathname));
 	let member = $state(loggedIn());
 	let error = $state('');
 	let meeting = $state<Meeting | null>(null);
@@ -31,13 +33,13 @@
 	let gen = 0;
 	const busy = $derived(!!meeting && !meeting.joined);
 
-	const params = new URLSearchParams(location.search);
 	if (params.has('code') || params.has('error')) {
 		history.replaceState(null, '', '/');
 		callback(params)
 			.then(r => {
-				room = r;
+				room = r.room;
 				member = true;
+				if (r.resume) join('', r.resume);
 			})
 			.catch(e => (error = e.message));
 	}
@@ -89,9 +91,12 @@
 		const tok = await token();
 		if (g !== gen) return;
 		if (member && !tok) {
-			member = false;
-			retry = null;
-			error = t('auth.expired');
+			// No refresh tokens for this client: go back through the SSO session.
+			login(room, media).catch(e => {
+				member = false;
+				retry = null;
+				error = e instanceof Error ? e.message : t('auth.expired');
+			});
 			return;
 		}
 		const m = new Meeting();

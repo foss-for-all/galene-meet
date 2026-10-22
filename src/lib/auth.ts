@@ -25,11 +25,14 @@ function take<T>(storage: Storage, key: string, remove = false): T | null {
 	}
 }
 
-export async function login(room: string) {
+export type Resume = { cam: boolean; mic: boolean };
+
+// resume: join right after the redirect, for a member whose token ran out.
+export async function login(room: string, resume?: Resume) {
 	const verifier = random(32);
 	const state = random(16);
 	const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
-	sessionStorage.setItem(PENDING, JSON.stringify({ state, verifier, room }));
+	sessionStorage.setItem(PENDING, JSON.stringify({ state, verifier, room, resume }));
 	location.assign(`${SSO}/auth?` + new URLSearchParams({
 		client_id: CLIENT,
 		response_type: 'code',
@@ -55,8 +58,8 @@ async function grant(body: Record<string, string>): Promise<string> {
 	return json.access_token;
 }
 
-export async function callback(params: URLSearchParams): Promise<string> {
-	const saved = take<{ state: string; verifier: string; room: string }>(sessionStorage, PENDING, true);
+export async function callback(params: URLSearchParams): Promise<{ room: string; resume?: Resume }> {
+	const saved = take<{ state: string; verifier: string; room: string; resume?: Resume }>(sessionStorage, PENDING, true);
 	// State first: otherwise any link could put its own error_description on the page.
 	if (!saved || saved.state !== params.get('state'))
 		throw new Error(t('auth.mismatch'));
@@ -68,7 +71,7 @@ export async function callback(params: URLSearchParams): Promise<string> {
 		redirect_uri: redirect(),
 		code_verifier: saved.verifier,
 	});
-	return saved.room;
+	return { room: saved.room, resume: saved.resume };
 }
 
 function expired(jwt: string): boolean {

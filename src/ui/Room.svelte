@@ -12,6 +12,13 @@
 	const canRecord = $derived(meeting.perms.includes('record'));
 
 	let settings = $state(false);
+	let more = $state(false);
+	const canShare = !!navigator.mediaDevices?.getDisplayMedia;
+
+	function run(f: () => void) {
+		more = false;
+		f();
+	}
 	let layout = $state<'grid' | 'speaker'>('grid');
 	let panel = $state<'chat' | 'people' | null>(null);
 	let seen = $state(0);
@@ -58,23 +65,33 @@
 			<button class:off={!meeting.cam} title={meeting.cam ? '카메라 끄기' : '카메라 켜기'} onclick={() => meeting.toggleCam()}>
 				<Icon name={meeting.cam ? 'video' : 'video-off'} />
 			</button>
-			<button aria-pressed={meeting.screen} title="화면 공유" onclick={() => meeting.toggleScreen()}>
-				<Icon name="monitor-up" />
-			</button>
 		{/if}
-		{#if canRecord}
-			<button class:recording={meeting.recording} title={meeting.recording ? '녹화 중지' : '녹화 시작'} onclick={() => meeting.record()}>
-				<Icon name="circle-dot" />
+		<div class="extra" class:open={more}>
+			{#if present && canShare}
+				<button aria-pressed={meeting.screen} title="화면 공유" onclick={() => run(() => meeting.toggleScreen())}>
+					<Icon name="monitor-up" />
+				</button>
+			{/if}
+			{#if canRecord}
+				<button class:recording={meeting.recording} title={meeting.recording ? '녹화 중지' : '녹화 시작'} onclick={() => run(() => meeting.record())}>
+					<Icon name="circle-dot" />
+				</button>
+			{/if}
+			<button
+				title={layout === 'grid' ? '발화자 보기' : '타일 보기'}
+				onclick={() => run(() => (layout = layout === 'grid' ? 'speaker' : 'grid'))}
+			>
+				<Icon name={layout === 'grid' ? 'user-square' : 'layout-grid'} />
 			</button>
-		{/if}
-		<button
-			title={layout === 'grid' ? '발화자 보기' : '타일 보기'}
-			onclick={() => (layout = layout === 'grid' ? 'speaker' : 'grid')}
-		>
-			<Icon name={layout === 'grid' ? 'user-square' : 'layout-grid'} />
-		</button>
-		<button aria-pressed={meeting.hand} title={meeting.hand ? '손 내리기' : '손 들기'} onclick={() => meeting.raiseHand()}>
-			<Icon name="hand" />
+			<button aria-pressed={meeting.hand} title={meeting.hand ? '손 내리기' : '손 들기'} onclick={() => run(() => meeting.raiseHand())}>
+				<Icon name="hand" />
+			</button>
+			<button title="설정" onclick={() => run(() => (settings = true))}>
+				<Icon name="settings" />
+			</button>
+		</div>
+		<button class="more" aria-pressed={more} title="더보기" onclick={() => (more = !more)}>
+			<Icon name="ellipsis" />
 		</button>
 		<button aria-pressed={panel === 'people'} title="참가자" onclick={() => toggle('people')}>
 			<Icon name="users" />
@@ -83,9 +100,6 @@
 		<button aria-pressed={panel === 'chat'} title="채팅" onclick={() => toggle('chat')}>
 			<Icon name="message-square" />
 			{#if unread > 0}<span class="badge">{unread}</span>{/if}
-		</button>
-		<button title="설정" onclick={() => (settings = true)}>
-			<Icon name="settings" />
 		</button>
 		<button class="danger" title="나가기" onclick={() => meeting.leave()}>
 			<Icon name="phone-off" />
@@ -110,10 +124,17 @@
 		display: flex;
 	}
 	nav {
+		position: relative;
 		display: flex;
 		justify-content: center;
 		gap: .5rem;
-		padding: .5rem;
+		padding: .5rem .5rem max(.5rem, env(safe-area-inset-bottom));
+	}
+	.extra {
+		display: contents;
+	}
+	.more {
+		display: none !important;
 	}
 	nav button {
 		position: relative;
@@ -143,6 +164,37 @@
 		width: 4rem;
 		border-radius: 1.5rem;
 		background: var(--danger);
+	}
+	@media (max-width: 40rem) {
+		nav {
+			gap: .375rem;
+		}
+		nav button {
+			width: 2.75rem;
+			height: 2.75rem;
+		}
+		nav .danger {
+			width: 3.5rem;
+		}
+		.more {
+			display: grid !important;
+		}
+		.extra {
+			display: none;
+			position: absolute;
+			bottom: 100%;
+			left: 50%;
+			transform: translateX(-50%);
+			z-index: 3;
+			gap: .375rem;
+			padding: .5rem;
+			border-radius: 1.75rem;
+			background: #1f2229;
+			box-shadow: 0 .5rem 1.5rem rgb(0 0 0 / .4);
+		}
+		.extra.open {
+			display: flex;
+		}
 	}
 	.badge {
 		position: absolute;

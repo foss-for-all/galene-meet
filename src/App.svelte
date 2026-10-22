@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { callback, loggedIn, login, logout, token } from './lib/auth';
+	import { autoplay } from './lib/autoplay.svelte';
 	import { GROUP, ROOM } from './lib/config';
 	import { t } from './lib/i18n.svelte';
 	import { Meeting } from './lib/meeting.svelte';
@@ -54,6 +55,8 @@
 			ended ||= meeting.joined;
 			waiting = true;
 			attempt++;
+		} else if (waiting && !meeting.rejected) {
+			attempt++;
 		} else {
 			error = meeting.error || (waiting ? t('err.connection') : '');
 			waiting = ended = false;
@@ -83,6 +86,7 @@
 			return;
 		}
 		const m = new Meeting();
+		autoplay.blocked = false;
 		meeting = m;
 		try {
 			await m.open(GROUP + room, tok ? null : n, tok ? { type: 'token', token: tok } : { type: 'password', password: '' });
@@ -115,6 +119,7 @@
 		{error}
 		{busy}
 		onjoin={join}
+		oncancel={cancel}
 		onlogin={signin}
 		onlogout={() => {
 			logout();

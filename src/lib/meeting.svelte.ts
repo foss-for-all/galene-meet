@@ -57,6 +57,7 @@ export class Meeting {
 	joined = $state(false);
 	closed = $state(false);
 	waiting = $state(false);
+	rejected = $state(false);
 	error = $state('');
 	perms = $state<string[]>([]);
 	notice = $state('');
@@ -76,6 +77,7 @@ export class Meeting {
 	#analyser: AnalyserNode | null = null;
 	#timer = 0;
 	#left = false;
+	#queue: Promise<unknown> = Promise.resolve();
 
 	tiles = $derived.by(() => {
 		this.#v;
@@ -98,7 +100,7 @@ export class Meeting {
 	recording = $derived(this.#users.some(u => u.perms.includes('system')));
 
 	async open(group: string, username: string | null, creds: Credentials) {
-		const r = await fetch(`/group/${group}/.status`);
+		const r = await fetch(`/group/${group}/.status`, { signal: AbortSignal.timeout(10_000) });
 		if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
 		const { endpoint } = await r.json();
 		if (this.#left) return;
@@ -120,6 +122,7 @@ export class Meeting {
 				location.href = message;
 				break;
 			case 'fail':
+				this.rejected = true;
 				this.waiting = message === NO_OP;
 				this.error = server(message);
 				sc.close();
@@ -153,6 +156,7 @@ export class Meeting {
 			switch (kind) {
 			case 'error':
 			case 'kicked':
+				this.rejected = true;
 				this.waiting = message === NO_OP;
 				this.error = this.notice = server(String(message));
 				break;
@@ -170,8 +174,8 @@ export class Meeting {
 				break;
 			}
 		};
-		sc.onerror = e => {
-			this.error = e instanceof Error ? e.message : String(e);
+		sc.onerror = () => {
+			this.error ||= t('err.connection');
 		};
 		sc.onclose = () => {
 			clearInterval(this.#timer);
@@ -246,11 +250,12 @@ export class Meeting {
 		return Object.values(this.sc.up).find(s => s.label === label);
 	}
 
-	#publish(label: string, media: MediaStream, old?: Stream, stop?: () => void) {
+	#publish(label: string, media: MediaStream, old?: Stream, stop?: () => void, source = media) {
 		const c = this.sc.newUpStream(old?.localId);
 		c.label = label;
 		c.setStream(media);
 		c.userdata.stop = stop;
+		c.userdata.source = source;
 		for (const t of media.getTracks()) {
 			const simulcast = label === 'camera' && t.kind === 'video';
 			c.pc.addTransceiver(t, {
@@ -273,6 +278,17 @@ export class Meeting {
 		this.#v++;
 	}
 
+	// Camera changes run one at a time, each reading the state the previous one left.
+	#serial(f: () => Promise<void>): Promise<void> {
+		const p = this.#queue.then(f).catch(this.#fail);
+		this.#queue = p;
+		return p;
+	}
+
+	#audioLive() {
+		return !!this.#up('camera')?.stream?.getAudioTracks().some(t => t.readyState === 'live');
+	}
+
 	async #camera(audio: boolean, video: boolean, release = false) {
 		const old = this.#up('camera');
 		if (!audio && !video) {
@@ -284,30 +300,37 @@ export class Meeting {
 			old.userdata.stop?.();
 			old.stream?.getTracks().forEach(t => t.stop());
 		}
-		const media = await navigator.mediaDevices.getUserMedia({
-			audio: audio && (this.micId ? { deviceId: this.micId } : true),
-			video: video && {
-				deviceId: this.camId || undefined,
-				width: { ideal: 1280 },
-				height: { ideal: 720 },
-				frameRate: { ideal: 30, max: 30 },
-			},
-		});
+		let media: MediaStream;
+		try {
+			media = await navigator.mediaDevices.getUserMedia({
+				audio: audio && (this.micId ? { deviceId: this.micId } : true),
+				video: video && {
+					deviceId: this.camId || undefined,
+					width: { ideal: 1280 },
+					height: { ideal: 720 },
+					frameRate: { ideal: 30, max: 30 },
+				},
+			});
+		} catch (e) {
+			if (release) old?.close();
+			throw e;
+		}
 		const drop = () => media.getTracks().forEach(t => t.stop());
 		if (!this.#alive) return drop();
-		media.getAudioTracks().forEach(track => {
-			track.enabled = this.mic;
-			track.onended = () => {
-				this.mic = false;
-				this.#camera(false, this.cam).catch(this.#fail);
-			};
-		});
-		media.getVideoTracks().forEach(track => {
-			track.onended = () => {
-				this.notice = t('notice.camEnded');
-				this.#camera(!!this.#up('camera')?.stream?.getAudioTracks().length, false).catch(this.#fail);
-			};
-		});
+		media.getAudioTracks().forEach(t => (t.enabled = this.mic));
+		// One unplugged device can end both tracks at once: recover once, from what is still live.
+		let lost = false;
+		const onlost = () => {
+			if (lost || this.#up('camera')?.userdata.source !== media) return;
+			lost = true;
+			setTimeout(() => {
+				const live = (kind: string) => media.getTracks().some(t => t.kind === kind && t.readyState === 'live');
+				if (!live('audio')) this.mic = false;
+				if (this.cam && !live('video')) this.notice = t('notice.camEnded');
+				this.#serial(() => this.#camera(live('audio'), live('video'), true));
+			}, 100);
+		};
+		media.getTracks().forEach(t => (t.onended = onlost));
 		this.#meter(media);
 		let out = media;
 		let stop: (() => void) | undefined;
@@ -332,7 +355,7 @@ export class Meeting {
 			stop?.();
 			return drop();
 		}
-		this.#publish('camera', out, old, stop);
+		this.#publish('camera', out, old, stop, media);
 		this.cam = video;
 	}
 
@@ -346,9 +369,10 @@ export class Meeting {
 		} catch {
 			this.notice = t('notice.bgTooBig');
 		}
-		const c = this.#up('camera');
 		const device = 'camId' in o || 'micId' in o;
-		if (c) await this.#camera(!!c.stream?.getAudioTracks().length, this.cam, device).catch(this.#fail);
+		await this.#serial(async () => {
+			if (this.#up('camera')) await this.#camera(this.#audioLive(), this.cam, device);
+		});
 	}
 
 	#meter(media: MediaStream) {
@@ -365,19 +389,21 @@ export class Meeting {
 		this.notice = key ? t(key) : e instanceof Error ? e.message : String(e);
 	};
 
-	async toggleMic() {
-		const a = this.#up('camera')?.stream?.getAudioTracks()[0];
-		this.mic = !this.mic;
-		if (a) a.enabled = this.mic;
-		else await this.#camera(true, this.cam).catch(e => {
-			this.mic = false;
-			this.#fail(e);
+	toggleMic() {
+		return this.#serial(async () => {
+			const a = this.#up('camera')?.stream?.getAudioTracks().find(t => t.readyState === 'live');
+			this.mic = !this.mic;
+			if (a) a.enabled = this.mic;
+			else
+				await this.#camera(true, this.cam).catch(e => {
+					this.mic = false;
+					throw e;
+				});
 		});
 	}
 
-	async toggleCam() {
-		const audio = !!this.#up('camera')?.stream?.getAudioTracks().length;
-		await this.#camera(audio, !this.cam).catch(this.#fail);
+	toggleCam() {
+		return this.#serial(() => this.#camera(this.#audioLive(), !this.cam));
 	}
 
 	async toggleScreen() {

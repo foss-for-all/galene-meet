@@ -11,6 +11,7 @@
 		error,
 		busy,
 		onjoin,
+		oncancel,
 		onlogin,
 		onlogout,
 	}: {
@@ -19,6 +20,7 @@
 		error: string;
 		busy: boolean;
 		onjoin: (name: string) => void;
+		oncancel: () => void;
 		onlogin: () => void;
 		onlogout: () => void;
 	} = $props();
@@ -83,6 +85,9 @@
 			</div>
 		{/if}
 	</form>
+	{#if busy}
+		<button type="button" class="link" onclick={oncancel}>{t('wait.cancel')}</button>
+	{/if}
 	<p role="alert">{shown}</p>
 	<Lang />
 </main>

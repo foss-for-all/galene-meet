@@ -14,6 +14,10 @@ export class Meeting {
 	closed = $state(false);
 	error = $state('');
 	perms = $state<string[]>([]);
+	notice = $state('');
+	mic = $state(false);
+	cam = $state(false);
+	screen = $state(false);
 	#v = $state(0);
 
 	tiles = $derived.by(() => {
@@ -35,6 +39,7 @@ export class Meeting {
 			case 'change':
 				this.joined = true;
 				this.perms = perms;
+				if (!perms.includes('present')) Object.values(sc.up).forEach(s => s.close());
 				sc.request({ '': ['audio', 'video-low'], screenshare: ['audio', 'video'] });
 				break;
 			case 'redirect':
@@ -56,6 +61,20 @@ export class Meeting {
 			s.ondowntrack = bump;
 			s.onclose = bump;
 		};
+		sc.onusermessage = (_id, _dest, _username, _time, _privileged, kind, _error, message) => {
+			switch (kind) {
+			case 'error':
+			case 'warning':
+			case 'info':
+				this.notice = String(message);
+				break;
+			case 'mute':
+				this.#up('camera')?.stream?.getAudioTracks().forEach(t => (t.enabled = false));
+				this.mic = false;
+				this.notice = '마이크가 꺼졌습니다.';
+				break;
+			}
+		};
 		sc.onerror = e => {
 			this.error = e instanceof Error ? e.message : String(e);
 		};
@@ -68,6 +87,80 @@ export class Meeting {
 
 	leave() {
 		this.sc.close();
+	}
+
+	#up(label: string) {
+		return Object.values(this.sc.up).find(s => s.label === label);
+	}
+
+	#publish(label: string, media: MediaStream, old?: Stream) {
+		const c = this.sc.newUpStream(old?.localId);
+		c.label = label;
+		c.setStream(media);
+		for (const t of media.getTracks()) {
+			const simulcast = label === 'camera' && t.kind === 'video';
+			c.pc.addTransceiver(t, {
+				direction: 'sendonly',
+				streams: [media],
+				sendEncodings: simulcast ? [{ rid: 'h' }, { rid: 'l', scaleResolutionDownBy: 2, maxBitrate: 100_000 }] : undefined,
+			});
+			t.onended = () => c.close();
+		}
+		c.onclose = replace => {
+			media.getTracks().forEach(t => t.stop());
+			if (!replace && label === 'camera') this.mic = this.cam = false;
+			if (!replace && label === 'screenshare') this.screen = false;
+			this.#v++;
+		};
+		c.onerror = e => {
+			this.notice = String(e);
+		};
+		this.#v++;
+	}
+
+	async #camera(audio: boolean, video: boolean) {
+		const old = this.#up('camera');
+		if (!audio && !video) {
+			old?.close();
+			return;
+		}
+		const media = await navigator.mediaDevices.getUserMedia({ audio, video });
+		media.getAudioTracks().forEach(t => (t.enabled = this.mic));
+		this.#publish('camera', media, old);
+		this.cam = video;
+	}
+
+	#fail = (e: unknown) => {
+		this.notice = e instanceof Error ? e.message : String(e);
+	};
+
+	async toggleMic() {
+		const a = this.#up('camera')?.stream?.getAudioTracks()[0];
+		this.mic = !this.mic;
+		if (a) a.enabled = this.mic;
+		else await this.#camera(true, this.cam).catch(e => {
+			this.mic = false;
+			this.#fail(e);
+		});
+	}
+
+	async toggleCam() {
+		const audio = !!this.#up('camera')?.stream?.getAudioTracks().length;
+		await this.#camera(audio, !this.cam).catch(this.#fail);
+	}
+
+	async toggleScreen() {
+		const s = this.#up('screenshare');
+		if (s) {
+			s.close();
+			return;
+		}
+		try {
+			this.#publish('screenshare', await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }));
+			this.screen = true;
+		} catch (e) {
+			this.#fail(e);
+		}
 	}
 
 	#tiles(): Tile[] {

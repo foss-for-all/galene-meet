@@ -8,6 +8,16 @@ export type Tile = {
 	local: boolean;
 };
 
+export type Message = {
+	key: string;
+	name: string;
+	time: Date;
+	text: string;
+	me: boolean;
+	mine: boolean;
+	private: boolean;
+};
+
 export class Meeting {
 	sc = new ServerConnection();
 	joined = $state(false);
@@ -18,6 +28,7 @@ export class Meeting {
 	mic = $state(false);
 	cam = $state(false);
 	screen = $state(false);
+	messages = $state<Message[]>([]);
 	#v = $state(0);
 
 	tiles = $derived.by(() => {
@@ -61,6 +72,17 @@ export class Meeting {
 			s.ondowntrack = bump;
 			s.onclose = bump;
 		};
+		sc.onchat = (id, source, dest, username, time, _privileged, _history, kind, message) => {
+			this.messages.push({
+				key: id ?? crypto.randomUUID(),
+				name: username,
+				time,
+				text: message,
+				me: kind === 'me',
+				mine: source === sc.id,
+				private: !!dest,
+			});
+		};
 		sc.onusermessage = (_id, _dest, _username, _time, _privileged, kind, _error, message) => {
 			switch (kind) {
 			case 'error':
@@ -73,6 +95,9 @@ export class Meeting {
 				this.mic = false;
 				this.notice = '마이크가 꺼졌습니다.';
 				break;
+			case 'clearchat':
+				this.messages = [];
+				break;
 			}
 		};
 		sc.onerror = e => {
@@ -83,6 +108,11 @@ export class Meeting {
 			bump();
 		};
 		sc.connect(endpoint);
+	}
+
+	send(text: string) {
+		if (text.startsWith('/me ')) this.sc.chat('me', '', text.slice(4));
+		else this.sc.chat('', '', text);
 	}
 
 	leave() {

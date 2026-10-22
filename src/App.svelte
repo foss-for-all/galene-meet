@@ -39,7 +39,7 @@
 			.then(r => {
 				room = r.room;
 				member = true;
-				if (r.resume) join('', r.resume);
+				if (r.resume) join(localStorage.getItem('meet-name') ?? '', r.resume);
 			})
 			.catch(e => (error = e.message));
 	}
@@ -114,7 +114,7 @@
 		autoplay.blocked = false;
 		meeting = m;
 		try {
-			await m.open(GROUP + room, tok ? null : n, tok ? { type: 'token', token: tok } : { type: 'password', password: '' });
+			await m.open(GROUP + room, tok ? null : n, tok ? { type: 'token', token: tok } : { type: 'password', password: '' }, n);
 		} catch (e) {
 			if (g !== gen) return;
 			meeting = null;

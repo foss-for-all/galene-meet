@@ -86,6 +86,8 @@
 			<button type="button" onclick={randomRoom}>{t('lobby.random')}</button>
 		</div>
 		{#if member}
+			<label for="name">{t('lobby.memberName')}</label>
+			<input id="name" bind:value={name} maxlength="64" autocomplete="nickname" />
 			<button type="submit" class="primary" aria-disabled={!support.webrtc || busy}>{t('lobby.join')}</button>
 			<button type="button" class="link" onclick={onlogout}>{t('lobby.logout')}</button>
 		{:else}

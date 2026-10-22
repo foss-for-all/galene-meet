@@ -52,6 +52,7 @@ export type Reaction = (typeof REACTIONS)[number];
 export type Person = {
 	id: string;
 	name: string;
+	account: string;
 	perms: string[];
 	hand: boolean;
 	self: boolean;
@@ -96,7 +97,8 @@ export class Meeting {
 		this.#v;
 		return Object.entries(this.sc.users).map(([id, u]): Person => ({
 			id,
-			name: u.username,
+			name: this.#display(id),
+			account: u.username,
 			perms: u.permissions,
 			hand: !!u.data?.raisehand,
 			self: id === this.sc.id,
@@ -107,7 +109,24 @@ export class Meeting {
 	people = $derived(this.#users.filter(u => !u.perms.includes('system')));
 	recording = $derived(this.#users.some(u => u.perms.includes('system')));
 
-	async open(group: string, username: string | null, creds: Credentials) {
+	// The display name lives in user data; the username stays the account name (members) or the joining name.
+	#display(id: string | null, fallback = '') {
+		const u = id ? this.sc.users[id] : undefined;
+		const n = u?.data?.name;
+		return (typeof n === 'string' && n.trim().slice(0, 64)) || u?.username || fallback;
+	}
+
+	rename(name: string) {
+		const n = name.trim().slice(0, 64);
+		this.sc.userAction('setdata', this.sc.id, { name: n || null });
+	}
+
+	myName = $derived.by(() => {
+		this.#v;
+		return this.#display(this.sc.id);
+	});
+
+	async open(group: string, username: string | null, creds: Credentials, name = '') {
 		const r = await fetch(`/group/${group}/.status`, { signal: AbortSignal.timeout(10_000) });
 		if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
 		const { endpoint } = await r.json();
@@ -115,7 +134,7 @@ export class Meeting {
 		const sc = this.sc;
 		const bump = () => this.#v++;
 
-		sc.onconnected = () => sc.join(group, username, creds);
+		sc.onconnected = () => sc.join(group, username, creds, name ? { name } : undefined);
 		sc.onjoined = (kind, _group, perms, _status, _data, _error, message) => {
 			switch (kind) {
 			case 'join':
@@ -153,7 +172,7 @@ export class Meeting {
 		sc.onchat = (id, source, dest, username, time, _privileged, _history, kind, message) => {
 			this.messages.push({
 				key: id ?? crypto.randomUUID(),
-				name: username,
+				name: this.#display(source, username),
 				time,
 				text: message,
 				me: kind === 'me',
@@ -161,9 +180,9 @@ export class Meeting {
 				private: !!dest,
 			});
 		};
-		sc.onusermessage = (_id, _dest, username, _time, privileged, kind, _error, message) => {
+		sc.onusermessage = (source, _dest, username, _time, privileged, kind, _error, message) => {
 			if (kind === 'reaction') {
-				if (REACTIONS.includes(message as Reaction)) this.#show(username, message as Reaction);
+				if (REACTIONS.includes(message as Reaction)) this.#show(this.#display(source, username), message as Reaction);
 				return;
 			}
 			// Any guest may send these kinds; only the server and operators are believed.
@@ -491,7 +510,7 @@ export class Meeting {
 			key: s?.id ?? user,
 			user,
 			hand: !!sc.users[user]?.data?.raisehand,
-			name: sc.users[user]?.username ?? s?.username ?? '',
+			name: this.#display(user, s?.username ?? ''),
 			label: s?.label ?? 'camera',
 			stream: s?.stream ?? null,
 			local: user === sc.id,

@@ -92,4 +92,6 @@ export default {
 	'notice.fxFailed': '배경 효과를 켤 수 없어 카메라를 껐습니다.',
 	'lobby.reserved': '이 이름은 쓸 수 없습니다. 다른 방 이름을 고르세요.',
 	'settings.auto': '자동',
+	'lobby.memberName': '표시 이름 (비우면 계정 이름)',
+	'settings.name': '표시 이름',
 };

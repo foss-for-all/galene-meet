@@ -94,4 +94,6 @@ export default {
 	'notice.fxFailed': 'The background effect failed, so the camera is off.',
 	'lobby.reserved': 'This name is reserved. Pick another room name.',
 	'settings.auto': 'Automatic',
+	'lobby.memberName': 'Display name (blank uses your account name)',
+	'settings.name': 'Display name',
 } satisfies Record<keyof typeof ko, string>;

@@ -21,7 +21,10 @@
 	<ul>
 		{#each sorted as p (p.id)}
 			<li>
-				<span class="name">{p.name}{#if p.self}<small> {t('people.you')}</small>{/if}</span>
+				<span class="name">
+					{p.name}{#if p.self}<small> {t('people.you')}</small>{/if}
+					{#if p.account !== p.name}<small class="account">{p.account}</small>{/if}
+				</span>
 				{#if p.hand}<span class="hand" title={t('tb.handUp')}><Icon name="hand" /></span>{/if}
 				{#if p.perms.includes('op')}<small class="tag">{t('people.op')}</small>{/if}
 				{#if op && !p.self}
@@ -83,6 +86,10 @@
 	}
 	small {
 		color: #9aa0ad;
+	}
+	.account {
+		display: block;
+		font-size: .75rem;
 	}
 	.tag {
 		padding: 0 .375rem;

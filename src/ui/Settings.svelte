@@ -17,6 +17,18 @@
 	onclose={onclose}
 >
 	<h2>{t('settings.title')}</h2>
+	<label>
+		{t('settings.name')}
+		<input
+			value={meeting.myName}
+			maxlength="64"
+			autocomplete="nickname"
+			onchange={e => {
+				meeting.rename(e.currentTarget.value);
+				localStorage.setItem('meet-name', e.currentTarget.value.trim());
+			}}
+		/>
+	</label>
 	<Devices camId={meeting.camId} micId={meeting.micId} onchange={o => meeting.configure(o)} />
 	{#if meeting.mic}
 		<Meter read={() => meeting.level()} />
@@ -61,6 +73,13 @@
 		gap: .25rem;
 		font-size: .875rem;
 		font-weight: 600;
+	}
+	input {
+		font-size: 1rem;
+		height: 2.5rem;
+		border-color: var(--line);
+		background: var(--bg);
+		font-weight: 400;
 	}
 	form {
 		display: flex;

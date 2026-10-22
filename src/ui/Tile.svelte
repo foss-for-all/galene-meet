@@ -15,7 +15,7 @@
 	const video = $derived(!!tile.stream?.getVideoTracks().length);
 </script>
 
-<figure class:share={tile.label !== 'camera'} class:local={tile.local} class:fit class:speaking>
+<figure class:share={tile.label !== 'camera'} class:mirror={tile.mirror} class:fit class:speaking>
 	<video
 		autoplay
 		playsinline
@@ -76,7 +76,7 @@
 	.fit video {
 		object-fit: contain;
 	}
-	.local:not(.share) video {
+	.mirror:not(.share) video {
 		transform: scaleX(-1);
 	}
 	.avatar {

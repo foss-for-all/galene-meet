@@ -11,6 +11,7 @@ export type Tile = {
 	label: string;
 	stream: MediaStream | null;
 	local: boolean;
+	mirror: boolean;
 };
 
 export type Message = {
@@ -49,6 +50,38 @@ function server(msg: string) {
 export const REACTIONS = ['thumbs-up', 'heart', 'laugh', 'party-popper', 'circle-question-mark'] as const;
 export type Reaction = (typeof REACTIONS)[number];
 
+// The same knobs and values as Galene's own client (static/galene.js).
+export type Advanced = {
+	send: 'lowest' | 'low' | 'normal' | 'unlimited';
+	simulcast: 'auto' | 'on' | 'off';
+	receive: 'everything' | 'low' | 'screenshare' | 'audio';
+	hqaudio: boolean;
+	processing: boolean;
+	blackboard: boolean;
+	mirror: boolean;
+};
+
+const ADVANCED: Advanced = {
+	send: 'normal',
+	simulcast: 'auto',
+	receive: 'everything',
+	hqaudio: false,
+	processing: true,
+	blackboard: false,
+	mirror: true,
+};
+
+const RATE = { lowest: 150_000, low: 300_000, normal: 700_000, unlimited: null };
+const LOW_RATE = 100_000;
+
+function advanced(): Advanced {
+	try {
+		return { ...ADVANCED, ...JSON.parse(localStorage.getItem('meet-adv') ?? '{}') };
+	} catch {
+		return { ...ADVANCED };
+	}
+}
+
 export type Person = {
 	id: string;
 	name: string;
@@ -75,6 +108,7 @@ export class Meeting {
 	micId = $state(localStorage.getItem('meet-mic') ?? '');
 	background = $state(localStorage.getItem('meet-bg') ?? 'none');
 	bgId = $state(localStorage.getItem('meet-bg-id') ?? '');
+	adv = $state<Advanced>(advanced());
 	reactions = $state<{ id: number; name: string; icon: Reaction }[]>([]);
 	#reacted = 0;
 	speaking = $state<string[]>([]);
@@ -145,7 +179,7 @@ export class Meeting {
 					Object.values(sc.up).forEach(s => s.close());
 					this.want = { cam: false, mic: false };
 				}
-				sc.request({ '': ['audio', 'video-low'], screenshare: ['audio', 'video'] });
+				sc.request(this.#request());
 				break;
 			case 'redirect':
 				sc.close();
@@ -240,13 +274,38 @@ export class Meeting {
 		if (list.join() !== this.speaking.join()) this.speaking = list;
 	}
 
-	quality(main: string | null, all: boolean) {
-		for (const s of Object.values(this.sc.down)) {
-			const want = all || s.id === main || s.label === 'screenshare' ? 'video' : 'video-low';
-			if (s.userdata.want === want) continue;
-			s.userdata.want = want;
-			s.request(['audio', want]);
+	#request(): Record<string, string[]> {
+		switch (this.adv.receive) {
+		case 'audio':
+			return { '': ['audio'] };
+		case 'screenshare':
+			return { '': ['audio'], screenshare: ['audio', 'video'] };
+		case 'low':
+			return { '': ['audio', 'video-low'] };
+		default:
+			return { '': ['audio', 'video-low'], screenshare: ['audio', 'video'] };
 		}
+	}
+
+	quality(main: string | null, all: boolean) {
+		const mode = this.adv.receive;
+		for (const s of Object.values(this.sc.down)) {
+			const share = s.label === 'screenshare';
+			const want =
+				mode === 'audio' || (mode === 'screenshare' && !share) ? ['audio']
+				: mode === 'low' ? ['audio', 'video-low']
+				: mode === 'screenshare' || all || s.id === main || share ? ['audio', 'video']
+				: ['audio', 'video-low'];
+			const key = want.join();
+			if (s.userdata.want === key) continue;
+			s.userdata.want = key;
+			s.request(want);
+		}
+	}
+
+	#simulcast(bps: number | null) {
+		if (this.adv.simulcast !== 'auto') return this.adv.simulcast === 'on';
+		return this.people.length > 2 && (bps === null || bps >= 2 * LOW_RATE);
 	}
 
 	react(icon: Reaction) {
@@ -306,13 +365,20 @@ export class Meeting {
 		c.setStream(media);
 		c.userdata.stop = stop;
 		c.userdata.source = source;
+		const bps = label === 'camera' ? RATE[this.adv.send] : null;
+		const simulcast = label === 'camera' && this.#simulcast(bps);
 		for (const t of media.getTracks()) {
-			const simulcast = label === 'camera' && t.kind === 'video';
-			c.pc.addTransceiver(t, {
-				direction: 'sendonly',
-				streams: [media],
-				sendEncodings: simulcast ? [{ rid: 'h' }, { rid: 'l', scaleResolutionDownBy: 2, maxBitrate: 100_000 }] : undefined,
-			});
+			let enc: RTCRtpEncodingParameters[] | undefined;
+			if (t.kind === 'video') {
+				if (label === 'camera' && this.adv.blackboard) t.contentHint = 'detail';
+				// Firefox rejects a rid on a single encoding.
+				enc = simulcast
+					? [{ rid: 'h', maxBitrate: bps ?? undefined }, { rid: 'l', scaleResolutionDownBy: 2, maxBitrate: LOW_RATE }]
+					: bps ? [{ maxBitrate: bps }] : undefined;
+			} else if (this.adv.hqaudio) {
+				enc = [{ maxBitrate: 128_000 }];
+			}
+			c.pc.addTransceiver(t, { direction: 'sendonly', streams: [media], sendEncodings: enc });
 			if (label !== 'camera') t.onended = () => c.close();
 		}
 		c.onclose = replace => {
@@ -358,11 +424,16 @@ export class Meeting {
 		let media: MediaStream;
 		try {
 			media = await navigator.mediaDevices.getUserMedia({
-				audio: audio && (this.micId ? { deviceId: this.micId } : true),
+				audio: audio && {
+					deviceId: this.micId || undefined,
+					echoCancellation: this.adv.processing,
+					noiseSuppression: this.adv.processing,
+					autoGainControl: this.adv.processing,
+				},
 				video: video && {
 					deviceId: this.camId || undefined,
-					width: { ideal: 1280 },
-					height: { ideal: 720 },
+					width: { ideal: this.adv.blackboard ? 1920 : 1280 },
+					height: { ideal: this.adv.blackboard ? 1080 : 720 },
 					frameRate: { ideal: 30, max: 30 },
 				},
 			});
@@ -436,6 +507,16 @@ export class Meeting {
 		const device = 'camId' in o || 'micId' in o;
 		await this.#serial(async () => {
 			if (this.#up('camera')) await this.#camera(this.#audioLive(), this.cam, device);
+		});
+	}
+
+	async advance(o: Partial<Advanced>) {
+		this.adv = { ...this.adv, ...o };
+		localStorage.setItem('meet-adv', JSON.stringify(this.adv));
+		if ('receive' in o) this.sc.request(this.#request());
+		if (!Object.keys(o).some(k => k !== 'receive' && k !== 'mirror')) return;
+		await this.#serial(async () => {
+			if (this.#up('camera')) await this.#camera(this.#audioLive(), this.cam);
 		});
 	}
 
@@ -514,6 +595,7 @@ export class Meeting {
 			label: s?.label ?? 'camera',
 			stream: s?.stream ?? null,
 			local: user === sc.id,
+			mirror: user === sc.id && this.adv.mirror,
 		});
 		for (const s of [...Object.values(sc.up), ...Object.values(sc.down)]) {
 			const user = s.up ? sc.id : s.source ?? '';

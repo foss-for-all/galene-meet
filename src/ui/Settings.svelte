@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { t } from '../lib/i18n.svelte';
 	import type { Meeting } from '../lib/meeting.svelte';
+	import Advanced from './Advanced.svelte';
 	import Backgrounds from './Backgrounds.svelte';
 	import Devices from './Devices.svelte';
 	import Lang from './Lang.svelte';
@@ -34,6 +35,7 @@
 		<Meter read={() => meeting.level()} />
 	{/if}
 	<Backgrounds value={meeting.background} selected={meeting.bgId} onchange={o => meeting.configure(o)} />
+	<Advanced {meeting} />
 	<label>
 		{t('settings.lang')}
 		<Lang />

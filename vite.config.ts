@@ -17,6 +17,7 @@ export default defineConfig({
 		proxy: {
 			'/ws': { target: galene, ws: true },
 			'/group': galene,
+			'/third-party': galene,
 		},
 	},
 });

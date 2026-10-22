@@ -2,10 +2,12 @@
 	import type { Meeting } from '../lib/meeting.svelte';
 	import Chat from './Chat.svelte';
 	import Grid from './Grid.svelte';
+	import Icon from './Icon.svelte';
 
 	let { meeting }: { meeting: Meeting } = $props();
 
 	const present = $derived(meeting.perms.includes('present'));
+	const canRecord = $derived(meeting.perms.includes('record'));
 
 	let chat = $state(false);
 	let seen = $state(0);
@@ -23,6 +25,9 @@
 </script>
 
 <div class="room">
+	{#if meeting.recording}
+		<p class="rec" role="status"><Icon name="circle-dot" />녹화 중</p>
+	{/if}
 	{#if meeting.notice}
 		<p class="notice" role="status">{meeting.notice}</p>
 	{/if}
@@ -34,14 +39,28 @@
 	</div>
 	<nav>
 		{#if present}
-			<button aria-pressed={meeting.mic} onclick={() => meeting.toggleMic()}>마이크</button>
-			<button aria-pressed={meeting.cam} onclick={() => meeting.toggleCam()}>카메라</button>
-			<button aria-pressed={meeting.screen} onclick={() => meeting.toggleScreen()}>화면 공유</button>
+			<button class:off={!meeting.mic} title={meeting.mic ? '마이크 끄기' : '마이크 켜기'} onclick={() => meeting.toggleMic()}>
+				<Icon name={meeting.mic ? 'mic' : 'mic-off'} />
+			</button>
+			<button class:off={!meeting.cam} title={meeting.cam ? '카메라 끄기' : '카메라 켜기'} onclick={() => meeting.toggleCam()}>
+				<Icon name={meeting.cam ? 'video' : 'video-off'} />
+			</button>
+			<button aria-pressed={meeting.screen} title="화면 공유" onclick={() => meeting.toggleScreen()}>
+				<Icon name="monitor-up" />
+			</button>
 		{/if}
-		<button aria-pressed={chat} onclick={() => (chat = !chat)}>
-			채팅{#if unread > 0}<span class="badge">{unread}</span>{/if}
+		{#if canRecord}
+			<button class:recording={meeting.recording} title={meeting.recording ? '녹화 중지' : '녹화 시작'} onclick={() => meeting.record()}>
+				<Icon name="circle-dot" />
+			</button>
+		{/if}
+		<button aria-pressed={chat} title="채팅" onclick={() => (chat = !chat)}>
+			<Icon name="message-square" />
+			{#if unread > 0}<span class="badge">{unread}</span>{/if}
 		</button>
-		<button class="danger" onclick={() => meeting.leave()}>나가기</button>
+		<button class="danger" title="나가기" onclick={() => meeting.leave()}>
+			<Icon name="phone-off" />
+		</button>
 	</nav>
 </div>
 
@@ -68,29 +87,66 @@
 		padding: .5rem;
 	}
 	nav button {
-		border-color: #3a3f4b;
+		position: relative;
+		display: grid;
+		place-items: center;
+		width: 3rem;
+		height: 3rem;
+		padding: 0;
+		border: none;
+		border-radius: 50%;
+		background: #2d313b;
+	}
+	nav button:hover {
+		background: #3a3f4b;
 	}
 	nav button[aria-pressed='true'] {
-		background: #fff;
+		background: #8fb9ff;
 		color: #111318;
 	}
+	nav .off {
+		background: var(--danger);
+	}
+	nav .recording {
+		color: var(--danger);
+	}
+	nav .danger {
+		width: 4rem;
+		border-radius: 1.5rem;
+		background: var(--danger);
+	}
 	.badge {
-		margin-left: .375rem;
-		padding: 0 .375rem;
+		position: absolute;
+		top: -.125rem;
+		right: -.125rem;
+		min-width: 1.25rem;
+		padding: 0 .25rem;
 		border-radius: 1rem;
 		background: var(--danger);
 		color: #fff;
 		font-size: .75rem;
+		line-height: 1.25rem;
 	}
-	.notice {
+	.notice,
+	.rec {
 		position: absolute;
 		top: 1rem;
-		left: 50%;
-		transform: translateX(-50%);
 		z-index: 1;
 		margin: 0;
-		padding: .5rem 1rem;
+		padding: .375rem .75rem;
 		border-radius: .5rem;
 		background: #2d313b;
+	}
+	.notice {
+		left: 50%;
+		transform: translateX(-50%);
+	}
+	.rec {
+		left: 1rem;
+		display: flex;
+		gap: .375rem;
+		align-items: center;
+		color: #ff8a80;
+		font-size: .875rem;
 	}
 </style>

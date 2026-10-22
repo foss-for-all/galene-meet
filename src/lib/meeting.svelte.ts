@@ -2,6 +2,7 @@ import { ServerConnection, type Credentials, type Stream } from '../../vendor/ga
 
 export type Tile = {
 	key: string;
+	user: string;
 	name: string;
 	label: string;
 	stream: MediaStream | null;
@@ -16,6 +17,14 @@ export type Message = {
 	me: boolean;
 	mine: boolean;
 	private: boolean;
+};
+
+export type Person = {
+	id: string;
+	name: string;
+	perms: string[];
+	hand: boolean;
+	self: boolean;
 };
 
 export class Meeting {
@@ -35,6 +44,21 @@ export class Meeting {
 		this.#v;
 		return this.#tiles();
 	});
+
+	#users = $derived.by(() => {
+		this.#v;
+		return Object.entries(this.sc.users).map(([id, u]): Person => ({
+			id,
+			name: u.username,
+			perms: u.permissions,
+			hand: !!u.data?.raisehand,
+			self: id === this.sc.id,
+		}));
+	});
+
+	// Galene's disk writer joins the group as a "system" user while recording.
+	people = $derived(this.#users.filter(u => !u.perms.includes('system')));
+	recording = $derived(this.#users.some(u => u.perms.includes('system')));
 
 	async open(group: string, username: string | null, creds: Credentials) {
 		const r = await fetch(`/group/${group}/.status`);
@@ -119,6 +143,10 @@ export class Meeting {
 		this.sc.close();
 	}
 
+	record() {
+		this.sc.groupAction(this.recording ? 'unrecord' : 'record');
+	}
+
 	#up(label: string) {
 		return Object.values(this.sc.up).find(s => s.label === label);
 	}
@@ -199,6 +227,7 @@ export class Meeting {
 		const shares: Tile[] = [];
 		const tile = (user: string, s?: Stream): Tile => ({
 			key: s?.id ?? user,
+			user,
 			name: sc.users[user]?.username ?? s?.username ?? '',
 			label: s?.label ?? 'camera',
 			stream: s?.stream ?? null,
@@ -209,6 +238,7 @@ export class Meeting {
 			if (s.label === 'camera') cams.set(user, s);
 			else shares.push(tile(user, s));
 		}
-		return [...shares, ...Object.keys(sc.users).map(id => tile(id, cams.get(id)))];
+		const people = Object.entries(sc.users).filter(([, u]) => !u.permissions.includes('system'));
+		return [...shares, ...people.map(([id]) => tile(id, cams.get(id)))];
 	}
 }

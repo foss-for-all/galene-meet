@@ -26,6 +26,10 @@ const NO_OP = 'there are no operators in this group';
 
 const SERVER: Record<string, Key> = {
 	[NO_OP]: 'err.noOp',
+	'you have been kicked out': 'err.kicked',
+	'too many users': 'err.full',
+	'not authorised': 'err.notAuth',
+	'this username is taken': 'err.nameTaken',
 };
 
 const MEDIA: Record<string, Key> = {
@@ -141,7 +145,9 @@ export class Meeting {
 				private: !!dest,
 			});
 		};
-		sc.onusermessage = (_id, _dest, _username, _time, _privileged, kind, _error, message) => {
+		sc.onusermessage = (_id, _dest, _username, _time, privileged, kind, _error, message) => {
+			// Any guest may send these kinds; only the server and operators are believed.
+			if (!privileged) return;
 			switch (kind) {
 			case 'error':
 			case 'kicked':
@@ -214,6 +220,10 @@ export class Meeting {
 		this.sc.close();
 	}
 
+	get #alive() {
+		return !this.closed && this.sc.socket?.readyState === WebSocket.OPEN;
+	}
+
 	hand = $derived(this.#users.some(u => u.self && u.hand));
 
 	raiseHand() {
@@ -237,6 +247,7 @@ export class Meeting {
 		const c = this.sc.newUpStream(old?.localId);
 		c.label = label;
 		c.setStream(media);
+		c.userdata.stop = stop;
 		for (const t of media.getTracks()) {
 			const simulcast = label === 'camera' && t.kind === 'video';
 			c.pc.addTransceiver(t, {
@@ -244,7 +255,7 @@ export class Meeting {
 				streams: [media],
 				sendEncodings: simulcast ? [{ rid: 'h' }, { rid: 'l', scaleResolutionDownBy: 2, maxBitrate: 100_000 }] : undefined,
 			});
-			t.onended = () => c.close();
+			if (label !== 'camera') t.onended = () => c.close();
 		}
 		c.onclose = replace => {
 			media.getTracks().forEach(t => t.stop());
@@ -259,11 +270,16 @@ export class Meeting {
 		this.#v++;
 	}
 
-	async #camera(audio: boolean, video: boolean) {
+	async #camera(audio: boolean, video: boolean, release = false) {
 		const old = this.#up('camera');
 		if (!audio && !video) {
 			old?.close();
 			return;
+		}
+		// Some platforms open only one camera at a time.
+		if (release && old) {
+			old.userdata.stop?.();
+			old.stream?.getTracks().forEach(t => t.stop());
 		}
 		const media = await navigator.mediaDevices.getUserMedia({
 			audio: audio && (this.micId ? { deviceId: this.micId } : true),
@@ -274,7 +290,21 @@ export class Meeting {
 				frameRate: { ideal: 30, max: 30 },
 			},
 		});
-		media.getAudioTracks().forEach(t => (t.enabled = this.mic));
+		const drop = () => media.getTracks().forEach(t => t.stop());
+		if (!this.#alive) return drop();
+		media.getAudioTracks().forEach(track => {
+			track.enabled = this.mic;
+			track.onended = () => {
+				this.mic = false;
+				this.#camera(false, this.cam).catch(this.#fail);
+			};
+		});
+		media.getVideoTracks().forEach(track => {
+			track.onended = () => {
+				this.notice = t('notice.camEnded');
+				this.#camera(!!this.#up('camera')?.stream?.getAudioTracks().length, false).catch(this.#fail);
+			};
+		});
 		this.#meter(media);
 		let out = media;
 		let stop: (() => void) | undefined;
@@ -289,11 +319,15 @@ export class Meeting {
 				out = fx.stream;
 				stop = () => {
 					fx.stop();
-					media.getTracks().forEach(t => t.stop());
+					drop();
 				};
 			} catch (e) {
 				this.#fail(e);
 			}
+		}
+		if (!this.#alive) {
+			stop?.();
+			return drop();
 		}
 		this.#publish('camera', out, old, stop);
 		this.cam = video;
@@ -310,7 +344,8 @@ export class Meeting {
 			this.notice = t('notice.bgTooBig');
 		}
 		const c = this.#up('camera');
-		if (c) await this.#camera(!!c.stream?.getAudioTracks().length, this.cam).catch(this.#fail);
+		const device = 'camId' in o || 'micId' in o;
+		if (c) await this.#camera(!!c.stream?.getAudioTracks().length, this.cam, device).catch(this.#fail);
 	}
 
 	#meter(media: MediaStream) {
@@ -349,7 +384,9 @@ export class Meeting {
 			return;
 		}
 		try {
-			this.#publish('screenshare', await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }));
+			const media = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+			if (!this.#alive) return media.getTracks().forEach(t => t.stop());
+			this.#publish('screenshare', media);
 			this.screen = true;
 		} catch (e) {
 			this.#fail(e);

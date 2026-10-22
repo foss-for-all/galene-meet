@@ -69,4 +69,12 @@ export default {
 	'wait.copy': '링크 복사',
 	'wait.copied': '복사했습니다',
 	'wait.cancel': '취소',
+	'err.kicked': '진행자가 회의에서 내보냈습니다.',
+	'err.full': '방이 가득 찼습니다.',
+	'err.notAuth': '권한이 없습니다.',
+	'err.nameTaken': '같은 이름이 이미 방에 있습니다. 다른 이름을 쓰세요.',
+	'err.connection': '서버와 연결이 끊겼습니다.',
+	'auth.expired': '로그인이 만료되었습니다. 다시 로그인하세요.',
+	'notice.camEnded': '카메라 연결이 끊겼습니다.',
+	'room.unmute': '소리 켜기',
 };

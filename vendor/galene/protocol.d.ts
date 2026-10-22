@@ -14,6 +14,7 @@ export class ServerConnection {
 	id: string;
 	group: string | null;
 	username: string | null;
+	socket: WebSocket | null;
 	users: Record<string, User>;
 	up: Record<string, Stream>;
 	down: Record<string, Stream>;

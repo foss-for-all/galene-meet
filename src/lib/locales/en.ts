@@ -71,4 +71,12 @@ export default {
 	'wait.copy': 'Copy link',
 	'wait.copied': 'Copied',
 	'wait.cancel': 'Cancel',
+	'err.kicked': 'A moderator removed you from the call.',
+	'err.full': 'The room is full.',
+	'err.notAuth': 'Not allowed.',
+	'err.nameTaken': 'Someone in the room already uses this name. Pick another one.',
+	'err.connection': 'Lost the connection to the server.',
+	'auth.expired': 'Your sign-in expired. Sign in again.',
+	'notice.camEnded': 'The camera was disconnected.',
+	'room.unmute': 'Turn on sound',
 } satisfies Record<keyof typeof ko, string>;

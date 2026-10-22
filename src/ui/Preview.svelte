@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { analyse, chime, type Level } from '../lib/audio';
 	import { t } from '../lib/i18n.svelte';
+	import { support } from '../lib/support';
+	import Backgrounds from './Backgrounds.svelte';
 	import Devices from './Devices.svelte';
 	import Icon from './Icon.svelte';
 	import Meter from './Meter.svelte';
@@ -13,6 +15,8 @@
 
 	let camId = $state(localStorage.getItem('meet-cam') ?? '');
 	let micId = $state(localStorage.getItem('meet-mic') ?? '');
+	let bg = $state(localStorage.getItem('meet-bg') ?? 'none');
+	let bgImage = $state(localStorage.getItem('meet-bg-image') ?? '');
 	let stream = $state<MediaStream | null>(null);
 	let level = $state<Level | null>(null);
 	let error = $state('');
@@ -20,20 +24,38 @@
 	$effect(() => {
 		const want = { audio: active && mic, video: active && cam };
 		const ids = { camId, micId };
+		const image = bg === 'image' && bgImage;
+		const fx = want.video && support.effects && (bg === 'blur' || image) ? { image } : null;
 		if (!want.audio && !want.video) return;
 		let gone = false;
 		let got: MediaStream | null = null;
 		let lv: Level | null = null;
+		let stopFx: (() => void) | null = null;
 		navigator.mediaDevices
 			.getUserMedia({
 				audio: want.audio && (ids.micId ? { deviceId: ids.micId } : true),
 				video: want.video && { deviceId: ids.camId || undefined, width: { ideal: 1280 }, height: { ideal: 720 } },
 			})
-			.then(s => {
+			.then(async s => {
 				got = s;
 				if (gone) return s.getTracks().forEach(tr => tr.stop());
+				let shown = s;
+				if (fx) {
+					try {
+						const { applyEffect } = await import('../lib/background');
+						const out = await applyEffect(
+							s,
+							fx.image ? { kind: 'image', image: await createImageBitmap(await (await fetch(fx.image)).blob()) } : { kind: 'blur' },
+						);
+						if (gone) return out.stop();
+						stopFx = out.stop;
+						shown = out.stream;
+					} catch (e) {
+						console.error(e);
+					}
+				}
 				error = '';
-				stream = s;
+				stream = shown;
 				const a = s.getAudioTracks()[0];
 				lv = a ? analyse(a) : null;
 				level = lv;
@@ -44,11 +66,24 @@
 		return () => {
 			gone = true;
 			lv?.stop();
+			stopFx?.();
 			got?.getTracks().forEach(tr => tr.stop());
 			stream = null;
 			level = null;
 		};
 	});
+
+	function background(o: { background?: string; bgImage?: string }) {
+		if (o.background !== undefined) localStorage.setItem('meet-bg', (bg = o.background));
+		if (o.bgImage !== undefined) {
+			bgImage = o.bgImage;
+			try {
+				localStorage.setItem('meet-bg-image', bgImage);
+			} catch {
+				error = t('notice.bgTooBig');
+			}
+		}
+	}
 
 	function pick(o: { camId?: string; micId?: string }) {
 		if (o.camId !== undefined) localStorage.setItem('meet-cam', (camId = o.camId));
@@ -84,6 +119,7 @@
 	{#if level}
 		<Meter read={level.read} />
 	{/if}
+	<Backgrounds value={bg} image={bgImage} onchange={background} />
 	<details>
 		<summary>{t('preview.devices')}</summary>
 		<div class="devices">

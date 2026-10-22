@@ -9,6 +9,7 @@
 		room = $bindable(),
 		member,
 		error,
+		busy,
 		onjoin,
 		onlogin,
 		onlogout,
@@ -16,6 +17,7 @@
 		room: string;
 		member: boolean;
 		error: string;
+		busy: boolean;
 		onjoin: (name: string) => void;
 		onlogin: () => void;
 		onlogout: () => void;
@@ -36,7 +38,7 @@
 
 	function submit(e: SubmitEvent) {
 		e.preventDefault();
-		if (!support.webrtc) return;
+		if (!support.webrtc || busy) return;
 		room = room.trim().toLowerCase();
 		if (!ROOM.test(room)) {
 			msg = t('lobby.badRoom');
@@ -70,14 +72,14 @@
 			<button type="button" onclick={randomRoom}>{t('lobby.random')}</button>
 		</div>
 		{#if member}
-			<button type="submit" class="primary" aria-disabled={!support.webrtc}>{t('lobby.join')}</button>
+			<button type="submit" class="primary" aria-disabled={!support.webrtc || busy}>{t('lobby.join')}</button>
 			<button type="button" class="link" onclick={onlogout}>{t('lobby.logout')}</button>
 		{:else}
 			<label for="name">{t('lobby.name')}</label>
 			<input id="name" bind:value={name} maxlength="64" autocomplete="nickname" />
 			<div class="row">
 				<button type="submit" value="login" class="primary" aria-disabled={!support.webrtc}>{t('lobby.login')}</button>
-				<button type="submit" value="guest" aria-disabled={!support.webrtc}>{t('lobby.guest')}</button>
+				<button type="submit" value="guest" aria-disabled={!support.webrtc || busy}>{t('lobby.guest')}</button>
 			</div>
 		{/if}
 	</form>

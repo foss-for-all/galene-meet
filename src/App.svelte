@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { callback, loggedIn, login, logout, token } from './lib/auth';
 	import { GROUP, ROOM } from './lib/config';
+	import { t } from './lib/i18n.svelte';
 	import { Meeting } from './lib/meeting.svelte';
 	import Lobby from './ui/Lobby.svelte';
 	import Room from './ui/Room.svelte';
@@ -25,6 +26,8 @@
 	let waiting = $state(false);
 	let ended = $state(false);
 	let attempt = $state(0);
+	let gen = 0;
+	const busy = $derived(!!meeting && !meeting.joined);
 
 	const params = new URLSearchParams(location.search);
 	if (params.has('code') || params.has('error')) {
@@ -52,7 +55,8 @@
 			waiting = true;
 			attempt++;
 		} else {
-			error = meeting.error;
+			error = meeting.error || (waiting ? t('err.connection') : '');
+			waiting = ended = false;
 		}
 		meeting = null;
 	});
@@ -65,21 +69,33 @@
 	});
 
 	async function join(n: string) {
+		if (busy) return;
+		const g = ++gen;
 		name = n;
 		error = '';
-		const t = await token();
-		member = t !== null;
+		if (!waiting) ended = false;
+		const tok = await token();
+		if (g !== gen) return;
+		if (member && !tok) {
+			member = false;
+			waiting = false;
+			error = t('auth.expired');
+			return;
+		}
 		const m = new Meeting();
+		meeting = m;
 		try {
-			await m.open(GROUP + room, t ? null : n, t ? { type: 'token', token: t } : { type: 'password', password: '' });
-			meeting = m;
+			await m.open(GROUP + room, tok ? null : n, tok ? { type: 'token', token: tok } : { type: 'password', password: '' });
 		} catch (e) {
+			if (g !== gen) return;
+			meeting = null;
 			if (waiting) attempt++;
 			else error = e instanceof Error ? e.message : String(e);
 		}
 	}
 
 	function cancel() {
+		gen++;
 		waiting = ended = false;
 		meeting?.leave();
 		meeting = null;
@@ -97,6 +113,7 @@
 		bind:room
 		{member}
 		{error}
+		{busy}
 		onjoin={join}
 		onlogin={signin}
 		onlogout={() => {

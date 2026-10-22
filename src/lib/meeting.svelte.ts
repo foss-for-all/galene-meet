@@ -75,6 +75,7 @@ export class Meeting {
 	#audio: AudioContext | null = null;
 	#analyser: AnalyserNode | null = null;
 	#timer = 0;
+	#left = false;
 
 	tiles = $derived.by(() => {
 		this.#v;
@@ -100,6 +101,7 @@ export class Meeting {
 		const r = await fetch(`/group/${group}/.status`);
 		if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
 		const { endpoint } = await r.json();
+		if (this.#left) return;
 		const sc = this.sc;
 		const bump = () => this.#v++;
 
@@ -216,6 +218,7 @@ export class Meeting {
 	}
 
 	leave() {
+		this.#left = true;
 		this.error = '';
 		this.sc.close();
 	}

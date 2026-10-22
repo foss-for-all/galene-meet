@@ -1,3 +1,4 @@
+import { applyEffect } from './background';
 import { ServerConnection, type Credentials, type Stream } from '../../vendor/galene/protocol.js';
 
 export type Tile = {
@@ -39,6 +40,10 @@ export class Meeting {
 	cam = $state(false);
 	screen = $state(false);
 	messages = $state<Message[]>([]);
+	camId = $state(localStorage.getItem('meet-cam') ?? '');
+	micId = $state(localStorage.getItem('meet-mic') ?? '');
+	background = $state(localStorage.getItem('meet-bg') ?? 'none');
+	bgImage = $state(localStorage.getItem('meet-bg-image') ?? '');
 	speaking = $state<string[]>([]);
 	speaker = $state<string | null>(null);
 	#v = $state(0);
@@ -202,7 +207,7 @@ export class Meeting {
 		return Object.values(this.sc.up).find(s => s.label === label);
 	}
 
-	#publish(label: string, media: MediaStream, old?: Stream) {
+	#publish(label: string, media: MediaStream, old?: Stream, stop?: () => void) {
 		const c = this.sc.newUpStream(old?.localId);
 		c.label = label;
 		c.setStream(media);
@@ -217,6 +222,7 @@ export class Meeting {
 		}
 		c.onclose = replace => {
 			media.getTracks().forEach(t => t.stop());
+			stop?.();
 			if (!replace && label === 'camera') this.mic = this.cam = false;
 			if (!replace && label === 'screenshare') this.screen = false;
 			this.#v++;
@@ -233,11 +239,46 @@ export class Meeting {
 			old?.close();
 			return;
 		}
-		const media = await navigator.mediaDevices.getUserMedia({ audio, video });
+		const media = await navigator.mediaDevices.getUserMedia({
+			audio: audio && (this.micId ? { deviceId: this.micId } : true),
+			video: video && (this.camId ? { deviceId: this.camId } : true),
+		});
 		media.getAudioTracks().forEach(t => (t.enabled = this.mic));
 		this.#meter(media);
-		this.#publish('camera', media, old);
+		let out = media;
+		let stop: (() => void) | undefined;
+		const image = this.background === 'image' && this.bgImage;
+		if (video && (this.background === 'blur' || image)) {
+			try {
+				const fx = await applyEffect(
+					media,
+					image ? { kind: 'image', image: await createImageBitmap(await (await fetch(image)).blob()) } : { kind: 'blur' },
+				);
+				out = fx.stream;
+				stop = () => {
+					fx.stop();
+					media.getTracks().forEach(t => t.stop());
+				};
+			} catch (e) {
+				this.#fail(e);
+			}
+		}
+		this.#publish('camera', out, old, stop);
 		this.cam = video;
+	}
+
+	async configure(o: { camId?: string; micId?: string; background?: string; bgImage?: string }) {
+		Object.assign(this, o);
+		localStorage.setItem('meet-cam', this.camId);
+		localStorage.setItem('meet-mic', this.micId);
+		localStorage.setItem('meet-bg', this.background);
+		try {
+			localStorage.setItem('meet-bg-image', this.bgImage);
+		} catch {
+			this.notice = '배경 이미지가 너무 커서 기억하지 못합니다.';
+		}
+		const c = this.#up('camera');
+		if (c) await this.#camera(!!c.stream?.getAudioTracks().length, this.cam).catch(this.#fail);
 	}
 
 	#meter(media: MediaStream) {

@@ -3,6 +3,7 @@
 	import Chat from './Chat.svelte';
 	import Icon from './Icon.svelte';
 	import People from './People.svelte';
+	import Settings from './Settings.svelte';
 	import Stage from './Stage.svelte';
 
 	let { meeting }: { meeting: Meeting } = $props();
@@ -10,6 +11,7 @@
 	const present = $derived(meeting.perms.includes('present'));
 	const canRecord = $derived(meeting.perms.includes('record'));
 
+	let settings = $state(false);
 	let layout = $state<'grid' | 'speaker'>('grid');
 	let panel = $state<'chat' | 'people' | null>(null);
 	let seen = $state(0);
@@ -28,6 +30,10 @@
 		return () => clearTimeout(t);
 	});
 </script>
+
+{#if settings}
+	<Settings {meeting} onclose={() => (settings = false)} />
+{/if}
 
 <div class="room">
 	{#if meeting.recording}
@@ -77,6 +83,9 @@
 		<button aria-pressed={panel === 'chat'} title="채팅" onclick={() => toggle('chat')}>
 			<Icon name="message-square" />
 			{#if unread > 0}<span class="badge">{unread}</span>{/if}
+		</button>
+		<button title="설정" onclick={() => (settings = true)}>
+			<Icon name="settings" />
 		</button>
 		<button class="danger" title="나가기" onclick={() => meeting.leave()}>
 			<Icon name="phone-off" />

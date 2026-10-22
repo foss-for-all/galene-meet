@@ -1,0 +1,105 @@
+export type Effect = { kind: 'blur' } | { kind: 'image'; image: ImageBitmap };
+
+let worker: Promise<Worker> | null = null;
+
+function call(w: Worker, msg: unknown, transfer: Transferable[] = []): Promise<any> {
+	return new Promise((resolve, reject) => {
+		w.onmessage = e => (e.data.error ? reject(new Error(e.data.error)) : resolve(e.data));
+		w.postMessage(msg, transfer);
+	});
+}
+
+function segmenter(): Promise<Worker> {
+	worker ??= (async () => {
+		const w = new Worker('/segment-worker.js');
+		await call(w, {});
+		return w;
+	})().catch(e => {
+		worker = null;
+		throw e;
+	});
+	return worker;
+}
+
+function cover(ctx: CanvasRenderingContext2D, img: ImageBitmap, w: number, h: number) {
+	const s = Math.max(w / img.width, h / img.height);
+	ctx.drawImage(img, (w - img.width * s) / 2, (h - img.height * s) / 2, img.width * s, img.height * s);
+}
+
+// The mask is opaque on the background: paint the effect there, then the camera frame behind it.
+function draw(ctx: CanvasRenderingContext2D, frame: ImageBitmap, mask: ImageBitmap, effect: Effect) {
+	const { width: w, height: h } = frame;
+	if (ctx.canvas.width !== w || ctx.canvas.height !== h) {
+		ctx.canvas.width = w;
+		ctx.canvas.height = h;
+	}
+	ctx.globalCompositeOperation = 'copy';
+	ctx.filter = 'blur(2px)';
+	ctx.drawImage(mask, 0, 0, w, h);
+	ctx.filter = 'none';
+	ctx.globalCompositeOperation = 'source-in';
+	if (effect.kind === 'blur') {
+		ctx.drawImage(frame, 0, 0);
+		ctx.globalCompositeOperation = 'copy';
+		ctx.filter = `blur(${Math.round(w / 48)}px)`;
+		ctx.drawImage(ctx.canvas, 0, 0);
+		ctx.filter = 'none';
+	} else {
+		cover(ctx, effect.image, w, h);
+	}
+	ctx.globalCompositeOperation = 'destination-over';
+	ctx.drawImage(frame, 0, 0);
+	ctx.globalCompositeOperation = 'source-over';
+}
+
+export async function applyEffect(input: MediaStream, effect: Effect): Promise<{ stream: MediaStream; stop: () => void }> {
+	const w = await segmenter();
+	const video = document.createElement('video');
+	video.muted = true;
+	video.playsInline = true;
+	video.srcObject = new MediaStream(input.getVideoTracks());
+	await video.play();
+
+	const ctx = document.createElement('canvas').getContext('2d')!;
+	const track = ctx.canvas.captureStream().getVideoTracks()[0];
+	let stopped = false;
+
+	const frame = async () => {
+		if (stopped) return;
+		try {
+			const f = await createImageBitmap(video);
+			const copy = await createImageBitmap(f);
+			const { mask } = await call(w, { frame: f, time: performance.now() }, [f]);
+			if (!stopped) draw(ctx, copy, mask, effect);
+			copy.close();
+			mask.close();
+		} catch (e) {
+			console.error(e);
+		}
+		video.requestVideoFrameCallback(frame);
+	};
+	video.requestVideoFrameCallback(frame);
+
+	return {
+		stream: new MediaStream([track, ...input.getAudioTracks()]),
+		stop() {
+			stopped = true;
+			track.stop();
+			video.srcObject = null;
+		},
+	};
+}
+
+export async function loadImage(file: Blob): Promise<string> {
+	const img = await createImageBitmap(file);
+	const s = Math.min(1, 1280 / Math.max(img.width, img.height));
+	const c = new OffscreenCanvas(Math.round(img.width * s), Math.round(img.height * s));
+	c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+	img.close();
+	const blob = await c.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
+	return new Promise(resolve => {
+		const r = new FileReader();
+		r.onload = () => resolve(r.result as string);
+		r.readAsDataURL(blob);
+	});
+}

@@ -1,3 +1,5 @@
+import { glRenderer } from './compose-gl';
+
 export type Effect = { kind: 'blur' } | { kind: 'image'; image: ImageBitmap };
 
 type Pending = { resolve: (v: any) => void; reject: (e: Error) => void };
@@ -78,24 +80,48 @@ function draw(ctx: CanvasRenderingContext2D, small: CanvasRenderingContext2D, vi
 	ctx.globalCompositeOperation = 'source-over';
 }
 
-export async function applyEffect(input: MediaStream, effect: Effect): Promise<{ stream: MediaStream; stop: () => void }> {
-	const w = await segmenter();
+export async function applyEffect(
+	input: MediaStream,
+	effect: Effect,
+): Promise<{ stream: MediaStream; ready: Promise<unknown>; stop: () => void }> {
+	const w = segmenter();
+	let failed = false;
+	w.catch(() => (failed = true));
 	const video = document.createElement('video');
 	video.muted = true;
 	video.playsInline = true;
 	video.srcObject = new MediaStream(input.getVideoTracks());
 	await video.play();
 
-	const ctx = document.createElement('canvas').getContext('2d')!;
-	const small = document.createElement('canvas').getContext('2d')!;
-	if ('filter' in small) small.filter = 'blur(1px)';
-	const track = ctx.canvas.captureStream().getVideoTracks()[0];
+	let canvas = document.createElement('canvas');
+	let gl = glRenderer(canvas, effect);
+	if (gl && video.videoWidth) {
+		const blank = await createImageBitmap(new ImageData(MASK, Math.round((MASK * video.videoHeight) / video.videoWidth)));
+		if (gl.bench(video, blank) > 25) gl = null;
+		blank.close();
+	}
+	let render: (m: ImageBitmap) => void;
+	if (gl) {
+		const r = gl;
+		render = m => r.draw(video, m);
+	} else {
+		canvas = document.createElement('canvas');
+		const ctx = canvas.getContext('2d')!;
+		const small = document.createElement('canvas').getContext('2d')!;
+		if ('filter' in small) small.filter = 'blur(1px)';
+		render = m => draw(ctx, small, video, m, effect);
+	}
+	const track = canvas.captureStream().getVideoTracks()[0];
 	let stopped = false;
-	let mask: ImageBitmap | null = null;
+	// Until the first mask arrives everything counts as background, so the room never shows.
+	const opaque = new ImageData(MASK, Math.round((MASK * video.videoHeight) / video.videoWidth));
+	opaque.data.fill(255);
+	let mask: ImageBitmap | null = await createImageBitmap(opaque);
 	let busy = false;
 
 	// Segmentation runs beside rendering: every camera frame is drawn with the latest mask.
 	const segment = async () => {
+		if (failed) return;
 		busy = true;
 		try {
 			const f = await createImageBitmap(video, {
@@ -103,7 +129,7 @@ export async function applyEffect(input: MediaStream, effect: Effect): Promise<{
 				resizeHeight: Math.round((MASK * video.videoHeight) / video.videoWidth),
 				resizeQuality: 'low',
 			});
-			const r = await call(w, { frame: f, time: performance.now() }, [f]);
+			const r = await call(await w, { frame: f, time: performance.now() }, [f]);
 			if (stopped) return r.mask.close();
 			mask?.close();
 			mask = r.mask;
@@ -116,7 +142,7 @@ export async function applyEffect(input: MediaStream, effect: Effect): Promise<{
 
 	const frame = () => {
 		if (!busy) segment();
-		if (mask) draw(ctx, small, video, mask, effect);
+		if (mask) render(mask);
 	};
 	const loop = () => {
 		if (stopped) return;
@@ -132,6 +158,7 @@ export async function applyEffect(input: MediaStream, effect: Effect): Promise<{
 
 	return {
 		stream: new MediaStream([track, ...input.getAudioTracks()]),
+		ready: w,
 		stop() {
 			stopped = true;
 			ticker.terminate();

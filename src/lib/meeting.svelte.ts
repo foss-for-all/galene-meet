@@ -350,6 +350,7 @@ export class Meeting {
 					image ? { kind: 'image', image: await createImageBitmap(await (await fetch(image)).blob()) } : { kind: 'blur' },
 				);
 				out = fx.stream;
+				fx.ready.catch(this.#fail);
 				stop = () => {
 					fx.stop();
 					drop();

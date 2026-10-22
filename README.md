@@ -14,7 +14,9 @@ The result is in `dist/`.
     npm run dev
 
 Requests to `/ws` and `/group` go to a Galene at `http://127.0.0.1:8443`;
-set `GALENE` to use another one.
+set `GALENE` to use another one.  That Galene needs
+`"proxyURL": "http://localhost:5173/"` in `data/config.json`, or it
+rejects the websocket origin.
 
 ## Deploy
 

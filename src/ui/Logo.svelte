@@ -1,0 +1,12 @@
+<svg width="64" height="64" viewBox="0 0 100 100" role="img" aria-label="FOSS for All">
+<defs>
+<linearGradient id="b" x1="0" y1="50" x2="100" y2="50" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2979ff"/><stop offset="1" stop-color="#8fb9ff"/></linearGradient>
+<linearGradient id="g" x1="14.64" y1="29.05" x2="85.36" y2="29.05" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#00e676"/><stop offset="1" stop-color="#5ce6a2"/></linearGradient>
+<linearGradient id="w" x1="14.64" y1="70.95" x2="85.36" y2="70.95" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fafafa"/><stop offset="1" stop-color="#c7c7c7"/></linearGradient>
+</defs>
+<g transform="rotate(-45 50 50)">
+<circle cx="50" cy="50" r="50" fill="url(#b)"/>
+<path fill="url(#w)" d="m85.36 71.21a50.03 50.03 45 0 0-59.72-8.34 50.03 50.03 45 0 0-11 8.34l14.14 14.14a30.02 30.02 45 0 1 6.6-5 30.02 30.02 45 0 1 35.83 5z"/>
+<path fill="url(#g)" d="m14.64 28.79a50.03 50.03 45 0 0 59.72 8.34 50.03 50.03 45 0 0 11-8.34l-14.14-14.14a30.02 30.02 45 0 1-6.6 5 30.02 30.02 45 0 1-35.83-5z"/>
+</g>
+</svg>

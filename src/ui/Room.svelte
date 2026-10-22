@@ -5,6 +5,7 @@
 	import { support } from '../lib/support';
 	import Chat from './Chat.svelte';
 	import Icon from './Icon.svelte';
+	import Meter from './Meter.svelte';
 	import People from './People.svelte';
 	import Settings from './Settings.svelte';
 	import Stage from './Stage.svelte';
@@ -90,6 +91,7 @@
 			onclick={() => run(noPresent, () => meeting.toggleMic())}
 		>
 			<Icon name={meeting.mic ? 'mic' : 'mic-off'} />
+			{#if meeting.mic}<span class="level"><Meter read={() => meeting.level()} /></span>{/if}
 		</button>
 		<button
 			class:off={present && !meeting.cam}
@@ -259,6 +261,12 @@
 		color: #ffe08a;
 		font-size: .875rem;
 		box-shadow: 0 .5rem 1.5rem rgb(0 0 0 / .4);
+	}
+	.level {
+		position: absolute;
+		left: 25%;
+		right: 25%;
+		bottom: .4rem;
 	}
 	.badge {
 		position: absolute;

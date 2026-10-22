@@ -2,18 +2,12 @@
 	import { t } from '../lib/i18n.svelte';
 	import type { Meeting } from '../lib/meeting.svelte';
 	import { support } from '../lib/support';
+	import Devices from './Devices.svelte';
 	import Icon from './Icon.svelte';
 	import Lang from './Lang.svelte';
+	import Meter from './Meter.svelte';
 
 	let { meeting, onclose }: { meeting: Meeting; onclose: () => void } = $props();
-
-	let devices = $state<MediaDeviceInfo[]>([]);
-	const cams = $derived(devices.filter(d => d.kind === 'videoinput'));
-	const mics = $derived(devices.filter(d => d.kind === 'audioinput'));
-
-	$effect(() => {
-		navigator.mediaDevices.enumerateDevices().then(d => (devices = d));
-	});
 
 	let warned = $state(false);
 
@@ -41,24 +35,10 @@
 	onclose={onclose}
 >
 	<h2>{t('settings.title')}</h2>
-	<label>
-		{t('settings.camera')}
-		<select value={meeting.camId} onchange={e => meeting.configure({ camId: e.currentTarget.value })}>
-			<option value="">{t('settings.default')}</option>
-			{#each cams as d (d.deviceId)}
-				<option value={d.deviceId}>{d.label || d.deviceId.slice(0, 8)}</option>
-			{/each}
-		</select>
-	</label>
-	<label>
-		{t('settings.mic')}
-		<select value={meeting.micId} onchange={e => meeting.configure({ micId: e.currentTarget.value })}>
-			<option value="">{t('settings.default')}</option>
-			{#each mics as d (d.deviceId)}
-				<option value={d.deviceId}>{d.label || d.deviceId.slice(0, 8)}</option>
-			{/each}
-		</select>
-	</label>
+	<Devices camId={meeting.camId} micId={meeting.micId} onchange={o => meeting.configure(o)} />
+	{#if meeting.mic}
+		<Meter read={() => meeting.level()} />
+	{/if}
 	<fieldset>
 		<legend>{t('settings.bg')}</legend>
 		<div class="bg">
@@ -120,17 +100,6 @@
 		gap: .25rem;
 		font-size: .875rem;
 		font-weight: 600;
-	}
-	select {
-		font: inherit;
-		font-size: 1rem;
-		font-weight: 400;
-		height: 2.5rem;
-		border-radius: .5rem;
-		border: 1px solid #3a3f4b;
-		padding: 0 .5rem;
-		background: #181a20;
-		color: inherit;
 	}
 	fieldset {
 		margin: 0;

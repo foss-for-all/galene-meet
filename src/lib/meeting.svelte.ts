@@ -1,3 +1,4 @@
+import { analyse, type Level } from './audio';
 import { t, type Key } from './i18n.svelte';
 import { ServerConnection, type Credentials, type Stream } from '../../vendor/galene/protocol.js';
 
@@ -73,8 +74,7 @@ export class Meeting {
 	speaker = $state<string | null>(null);
 	#v = $state(0);
 	#last = new Map<string, number>();
-	#audio: AudioContext | null = null;
-	#analyser: AnalyserNode | null = null;
+	#mon: Level | null = null;
 	#timer = 0;
 	#left = false;
 	#queue: Promise<unknown> = Promise.resolve();
@@ -179,7 +179,7 @@ export class Meeting {
 		};
 		sc.onclose = () => {
 			clearInterval(this.#timer);
-			this.#audio?.close();
+			this.#mon?.stop();
 			this.closed = true;
 			bump();
 		};
@@ -197,11 +197,7 @@ export class Meeting {
 			const loud = Object.values(s.stats).some(t => t['inbound-rtp']?.audioEnergy > 0.04);
 			if (loud && s.source) this.#heard(s.source);
 		}
-		if (this.#analyser && this.mic) {
-			const buf = new Float32Array(this.#analyser.fftSize);
-			this.#analyser.getFloatTimeDomainData(buf);
-			if (Math.sqrt(buf.reduce((a, x) => a + x * x, 0) / buf.length) > 0.03) this.#heard(this.sc.id);
-		}
+		if (this.level() > 0.03) this.#heard(this.sc.id);
 		const now = Date.now();
 		const list = [...this.#last].filter(([, t]) => now - t < 700).map(([u]) => u).sort();
 		if (list.join() !== this.speaking.join()) this.speaking = list;
@@ -376,12 +372,13 @@ export class Meeting {
 	}
 
 	#meter(media: MediaStream) {
-		this.#analyser = null;
+		this.#mon?.stop();
 		const track = media.getAudioTracks()[0];
-		if (!track) return;
-		this.#audio ??= new AudioContext();
-		this.#analyser = this.#audio.createAnalyser();
-		this.#audio.createMediaStreamSource(new MediaStream([track])).connect(this.#analyser);
+		this.#mon = track ? analyse(track) : null;
+	}
+
+	level() {
+		return this.mic && this.#mon ? this.#mon.read() : 0;
 	}
 
 	#fail = (e: unknown) => {
@@ -399,6 +396,21 @@ export class Meeting {
 					this.mic = false;
 					throw e;
 				});
+		});
+	}
+
+	#started = false;
+
+	start(o: { cam: boolean; mic: boolean }) {
+		if (this.#started || !this.perms.includes('present')) return;
+		this.#started = true;
+		if (!o.cam && !o.mic) return;
+		this.#serial(async () => {
+			this.mic = o.mic;
+			await this.#camera(o.mic, o.cam).catch(e => {
+				this.mic = false;
+				throw e;
+			});
 		});
 	}
 

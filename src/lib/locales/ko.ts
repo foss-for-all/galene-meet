@@ -77,4 +77,7 @@ export default {
 	'auth.expired': '로그인이 만료되었습니다. 다시 로그인하세요.',
 	'notice.camEnded': '카메라 연결이 끊겼습니다.',
 	'room.unmute': '소리 켜기',
+	'preview.off': '카메라가 꺼져 있습니다',
+	'preview.devices': '장치와 소리 테스트',
+	'preview.speaker': '스피커 테스트음 재생',
 };

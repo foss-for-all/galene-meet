@@ -24,6 +24,7 @@
 	let error = $state('');
 	let meeting = $state<Meeting | null>(null);
 	let name = '';
+	let media = { cam: false, mic: false };
 	let waiting = $state(false);
 	let ended = $state(false);
 	let attempt = $state(0);
@@ -46,7 +47,9 @@
 	});
 
 	$effect(() => {
-		if (meeting?.joined) waiting = false;
+		if (!meeting?.joined) return;
+		waiting = false;
+		meeting.start(media);
 	});
 
 	$effect(() => {
@@ -71,10 +74,11 @@
 		return () => clearTimeout(id);
 	});
 
-	async function join(n: string) {
+	async function join(n: string, want = media) {
 		if (busy) return;
 		const g = ++gen;
 		name = n;
+		media = want;
 		error = '';
 		if (!waiting) ended = false;
 		const tok = await token();

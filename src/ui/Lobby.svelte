@@ -4,6 +4,7 @@
 	import { support } from '../lib/support';
 	import Lang from './Lang.svelte';
 	import Logo from './Logo.svelte';
+	import Preview from './Preview.svelte';
 
 	let {
 		room = $bindable(),
@@ -19,7 +20,7 @@
 		member: boolean;
 		error: string;
 		busy: boolean;
-		onjoin: (name: string) => void;
+		onjoin: (name: string, media: { cam: boolean; mic: boolean }) => void;
 		oncancel: () => void;
 		onlogin: () => void;
 		onlogout: () => void;
@@ -27,6 +28,9 @@
 
 	let name = $state(localStorage.getItem('meet-name') ?? '');
 	let msg = $state('');
+	let av = JSON.parse(localStorage.getItem('meet-av') ?? '{}');
+	let cam = $state(!!av.cam);
+	let mic = $state(!!av.mic);
 	const shown = $derived(msg || error);
 
 	function randomRoom() {
@@ -46,6 +50,7 @@
 			msg = t('lobby.badRoom');
 			return;
 		}
+		localStorage.setItem('meet-av', JSON.stringify({ cam, mic }));
 		if (e.submitter?.getAttribute('value') === 'login') {
 			onlogin();
 			return;
@@ -57,13 +62,16 @@
 		}
 		msg = '';
 		localStorage.setItem('meet-name', name);
-		onjoin(name);
+		onjoin(name, { cam, mic });
 	}
 </script>
 
 <main>
 	<Logo />
 	<h1>Galene</h1>
+	{#if support.webrtc}
+		<Preview bind:cam bind:mic active={!busy} />
+	{/if}
 	{#if !support.webrtc}
 		<p class="unsupported" role="alert">{t('lobby.unsupported')}</p>
 	{/if}

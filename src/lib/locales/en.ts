@@ -79,4 +79,7 @@ export default {
 	'auth.expired': 'Your sign-in expired. Sign in again.',
 	'notice.camEnded': 'The camera was disconnected.',
 	'room.unmute': 'Turn on sound',
+	'preview.off': 'Camera is off',
+	'preview.devices': 'Devices and sound check',
+	'preview.speaker': 'Play test sound',
 } satisfies Record<keyof typeof ko, string>;

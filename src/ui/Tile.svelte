@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Tile } from '../lib/meeting.svelte';
+	import Icon from './Icon.svelte';
 
 	let { tile }: { tile: Tile } = $props();
 
@@ -19,7 +20,10 @@
 	{#if !video}
 		<div class="avatar">{tile.name.slice(0, 1).toUpperCase()}</div>
 	{/if}
-	<figcaption>{tile.name}</figcaption>
+	<figcaption>
+		{#if tile.hand}<span class="hand"><Icon name="hand" /></span>{/if}
+		{tile.name}
+	</figcaption>
 </figure>
 
 <style>
@@ -57,6 +61,9 @@
 		font-weight: 600;
 	}
 	figcaption {
+		display: flex;
+		align-items: center;
+		gap: .25rem;
 		position: absolute;
 		left: .5rem;
 		bottom: .5rem;
@@ -65,5 +72,9 @@
 		background: rgb(0 0 0 / .55);
 		color: #fff;
 		font-size: .8125rem;
+	}
+	.hand {
+		display: flex;
+		color: #fbbc04;
 	}
 </style>

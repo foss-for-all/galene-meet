@@ -4,6 +4,7 @@ export type Tile = {
 	key: string;
 	user: string;
 	name: string;
+	hand: boolean;
 	label: string;
 	stream: MediaStream | null;
 	local: boolean;
@@ -143,6 +144,17 @@ export class Meeting {
 		this.sc.close();
 	}
 
+	hand = $derived(this.#users.some(u => u.self && u.hand));
+
+	raiseHand() {
+		this.sc.userAction('setdata', this.sc.id, { raisehand: this.hand ? null : true });
+	}
+
+	act(kind: 'mute' | 'kick' | 'op' | 'unop' | 'present' | 'unpresent', id: string) {
+		if (kind === 'mute') this.sc.userMessage('mute', id);
+		else this.sc.userAction(kind, id);
+	}
+
 	record() {
 		this.sc.groupAction(this.recording ? 'unrecord' : 'record');
 	}
@@ -228,6 +240,7 @@ export class Meeting {
 		const tile = (user: string, s?: Stream): Tile => ({
 			key: s?.id ?? user,
 			user,
+			hand: !!sc.users[user]?.data?.raisehand,
 			name: sc.users[user]?.username ?? s?.username ?? '',
 			label: s?.label ?? 'camera',
 			stream: s?.stream ?? null,

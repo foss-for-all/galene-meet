@@ -3,19 +3,23 @@
 	import Chat from './Chat.svelte';
 	import Grid from './Grid.svelte';
 	import Icon from './Icon.svelte';
+	import People from './People.svelte';
 
 	let { meeting }: { meeting: Meeting } = $props();
 
 	const present = $derived(meeting.perms.includes('present'));
 	const canRecord = $derived(meeting.perms.includes('record'));
 
-	let chat = $state(false);
+	let panel = $state<'chat' | 'people' | null>(null);
 	let seen = $state(0);
-	const unread = $derived(chat ? 0 : meeting.messages.length - seen);
+	const unread = $derived(panel === 'chat' ? 0 : meeting.messages.length - seen);
+	const hands = $derived(meeting.people.filter(p => p.hand).length);
 
 	$effect(() => {
-		if (chat) seen = meeting.messages.length;
+		if (panel === 'chat') seen = meeting.messages.length;
 	});
+
+	const toggle = (p: 'chat' | 'people') => (panel = panel === p ? null : p);
 
 	$effect(() => {
 		if (!meeting.notice) return;
@@ -33,8 +37,10 @@
 	{/if}
 	<div class="stage">
 		<Grid tiles={meeting.tiles} />
-		{#if chat}
+		{#if panel === 'chat'}
 			<Chat {meeting} />
+		{:else if panel === 'people'}
+			<People {meeting} />
 		{/if}
 	</div>
 	<nav>
@@ -54,7 +60,14 @@
 				<Icon name="circle-dot" />
 			</button>
 		{/if}
-		<button aria-pressed={chat} title="채팅" onclick={() => (chat = !chat)}>
+		<button aria-pressed={meeting.hand} title={meeting.hand ? '손 내리기' : '손 들기'} onclick={() => meeting.raiseHand()}>
+			<Icon name="hand" />
+		</button>
+		<button aria-pressed={panel === 'people'} title="참가자" onclick={() => toggle('people')}>
+			<Icon name="users" />
+			{#if hands > 0}<span class="badge hands">{hands}</span>{/if}
+		</button>
+		<button aria-pressed={panel === 'chat'} title="채팅" onclick={() => toggle('chat')}>
 			<Icon name="message-square" />
 			{#if unread > 0}<span class="badge">{unread}</span>{/if}
 		</button>
@@ -126,6 +139,10 @@
 		color: #fff;
 		font-size: .75rem;
 		line-height: 1.25rem;
+	}
+	.hands {
+		background: #fbbc04;
+		color: #111318;
 	}
 	.notice,
 	.rec {

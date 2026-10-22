@@ -21,8 +21,11 @@ export type Message = {
 	private: boolean;
 };
 
+// Galene's autokick: refused on join, or kicked when the last operator leaves.
+const NO_OP = 'there are no operators in this group';
+
 const SERVER: Record<string, Key> = {
-	'there are no operators in this group': 'err.noOp',
+	[NO_OP]: 'err.noOp',
 };
 
 const MEDIA: Record<string, Key> = {
@@ -49,6 +52,7 @@ export class Meeting {
 	sc = new ServerConnection();
 	joined = $state(false);
 	closed = $state(false);
+	waiting = $state(false);
 	error = $state('');
 	perms = $state<string[]>([]);
 	notice = $state('');
@@ -110,6 +114,7 @@ export class Meeting {
 				location.href = message;
 				break;
 			case 'fail':
+				this.waiting = message === NO_OP;
 				this.error = server(message);
 				sc.close();
 				break;
@@ -139,6 +144,8 @@ export class Meeting {
 		sc.onusermessage = (_id, _dest, _username, _time, _privileged, kind, _error, message) => {
 			switch (kind) {
 			case 'error':
+			case 'kicked':
+				this.waiting = message === NO_OP;
 				this.error = this.notice = server(String(message));
 				break;
 			case 'warning':

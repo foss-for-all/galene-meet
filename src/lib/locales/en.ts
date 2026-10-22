@@ -65,4 +65,10 @@ export default {
 	'err.noDevice': 'No camera or microphone found.',
 	'err.busy': 'Another app is using the camera or microphone.',
 	'err.noOp': 'No member has opened this room yet. Try again shortly.',
+	'wait.title': 'Waiting for a member',
+	'wait.body': 'You will join automatically once a member opens the room.',
+	'wait.ended': 'All members left, so the meeting is paused. You will rejoin automatically when a member returns.',
+	'wait.copy': 'Copy link',
+	'wait.copied': 'Copied',
+	'wait.cancel': 'Cancel',
 } satisfies Record<keyof typeof ko, string>;

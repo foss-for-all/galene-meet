@@ -1,5 +1,9 @@
 <script lang="ts">
+	import { t } from '../lib/i18n.svelte';
 	import type { Meeting } from '../lib/meeting.svelte';
+	import { support } from '../lib/support';
+	import Icon from './Icon.svelte';
+	import Lang from './Lang.svelte';
 
 	let { meeting, onclose }: { meeting: Meeting; onclose: () => void } = $props();
 
@@ -11,7 +15,18 @@
 		navigator.mediaDevices.enumerateDevices().then(d => (devices = d));
 	});
 
+	let warned = $state(false);
+
+	function pick(background: string) {
+		if (background !== 'none' && !support.effects) warned = true;
+		else meeting.configure({ background });
+	}
+
 	async function upload(e: Event) {
+		if (!support.effects) {
+			warned = true;
+			return;
+		}
 		const file = (e.currentTarget as HTMLInputElement).files?.[0];
 		if (!file) return;
 		const { loadImage } = await import('../lib/background');
@@ -25,48 +40,56 @@
 	}}
 	onclose={onclose}
 >
-	<h2>설정</h2>
+	<h2>{t('settings.title')}</h2>
 	<label>
-		카메라
+		{t('settings.camera')}
 		<select value={meeting.camId} onchange={e => meeting.configure({ camId: e.currentTarget.value })}>
-			<option value="">기본</option>
+			<option value="">{t('settings.default')}</option>
 			{#each cams as d (d.deviceId)}
 				<option value={d.deviceId}>{d.label || d.deviceId.slice(0, 8)}</option>
 			{/each}
 		</select>
 	</label>
 	<label>
-		마이크
+		{t('settings.mic')}
 		<select value={meeting.micId} onchange={e => meeting.configure({ micId: e.currentTarget.value })}>
-			<option value="">기본</option>
+			<option value="">{t('settings.default')}</option>
 			{#each mics as d (d.deviceId)}
 				<option value={d.deviceId}>{d.label || d.deviceId.slice(0, 8)}</option>
 			{/each}
 		</select>
 	</label>
 	<fieldset>
-		<legend>배경</legend>
+		<legend>{t('settings.bg')}</legend>
 		<div class="bg">
-			<button aria-pressed={meeting.background === 'none'} onclick={() => meeting.configure({ background: 'none' })}>없음</button>
-			<button aria-pressed={meeting.background === 'blur'} onclick={() => meeting.configure({ background: 'blur' })}>흐리게</button>
+			<button aria-pressed={meeting.background === 'none'} onclick={() => pick('none')}>{t('settings.none')}</button>
+			<button aria-pressed={meeting.background === 'blur'} aria-disabled={!support.effects} title={support.effects ? undefined : t('why.effects')} onclick={() => pick('blur')}>{t('settings.blur')}</button>
 			{#if meeting.bgImage}
 				<button
 					class="thumb"
 					aria-pressed={meeting.background === 'image'}
 					style:background-image="url({meeting.bgImage})"
-					title="이미지"
-					aria-label="이미지"
-					onclick={() => meeting.configure({ background: 'image' })}
+					title={t('settings.image')}
+					aria-label={t('settings.image')}
+					aria-disabled={!support.effects}
+					onclick={() => pick('image')}
 				></button>
 			{/if}
-			<label class="upload">
-				이미지 선택
+			<label class="upload" aria-disabled={!support.effects}>
+				{t('settings.upload')}
 				<input type="file" accept="image/*" onchange={upload} />
 			</label>
 		</div>
+		{#if warned || !support.effects}
+			<p class="warn" role="alert"><Icon name="triangle-alert" />{t('why.effects')}</p>
+		{/if}
 	</fieldset>
+	<label>
+		{t('settings.lang')}
+		<Lang />
+	</label>
 	<form method="dialog">
-		<button class="primary">닫기</button>
+		<button class="primary">{t('settings.close')}</button>
 	</form>
 </dialog>
 
@@ -139,6 +162,18 @@
 	}
 	.upload input {
 		display: none;
+	}
+	.warn {
+		display: flex;
+		align-items: center;
+		gap: .5rem;
+		margin: .5rem 0 0;
+		padding: .5rem .75rem;
+		border: 1px solid #fbbc04;
+		border-radius: .5rem;
+		background: #2e2610;
+		color: #ffe08a;
+		font-size: .875rem;
 	}
 	form {
 		display: flex;

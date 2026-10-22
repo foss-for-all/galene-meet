@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '../lib/i18n.svelte';
 	import type { Meeting } from '../lib/meeting.svelte';
 	import Icon from './Icon.svelte';
 
@@ -16,29 +17,29 @@
 </script>
 
 <aside>
-	<h2>참가자 {meeting.people.length}</h2>
+	<h2>{t('people.title', { n: meeting.people.length })}</h2>
 	<ul>
 		{#each sorted as p (p.id)}
 			<li>
-				<span class="name">{p.name}{#if p.self}<small> (나)</small>{/if}</span>
-				{#if p.hand}<span class="hand" title="손 들기"><Icon name="hand" /></span>{/if}
-				{#if p.perms.includes('op')}<small class="tag">진행자</small>{/if}
+				<span class="name">{p.name}{#if p.self}<small> {t('people.you')}</small>{/if}</span>
+				{#if p.hand}<span class="hand" title={t('tb.handUp')}><Icon name="hand" /></span>{/if}
+				{#if p.perms.includes('op')}<small class="tag">{t('people.op')}</small>{/if}
 				{#if op && !p.self}
 					<details>
-						<summary title="관리">...</summary>
+						<summary title={t('people.manage')} aria-label={t('people.manage')}>...</summary>
 						<menu>
-							<li><button onclick={e => act(e, 'mute', p.id)}>마이크 끄기</button></li>
+							<li><button onclick={e => act(e, 'mute', p.id)}>{t('people.mute')}</button></li>
 							{#if p.perms.includes('present')}
-								<li><button onclick={e => act(e, 'unpresent', p.id)}>발표 권한 빼기</button></li>
+								<li><button onclick={e => act(e, 'unpresent', p.id)}>{t('people.unpresent')}</button></li>
 							{:else}
-								<li><button onclick={e => act(e, 'present', p.id)}>발표 권한 주기</button></li>
+								<li><button onclick={e => act(e, 'present', p.id)}>{t('people.present')}</button></li>
 							{/if}
 							{#if p.perms.includes('op')}
-								<li><button onclick={e => act(e, 'unop', p.id)}>진행자 해제</button></li>
+								<li><button onclick={e => act(e, 'unop', p.id)}>{t('people.op.remove')}</button></li>
 							{:else}
-								<li><button onclick={e => act(e, 'op', p.id)}>진행자로 지정</button></li>
+								<li><button onclick={e => act(e, 'op', p.id)}>{t('people.op.add')}</button></li>
 							{/if}
-							<li><button class="kick" onclick={e => act(e, 'kick', p.id)}>내보내기</button></li>
+							<li><button class="kick" onclick={e => act(e, 'kick', p.id)}>{t('people.kick')}</button></li>
 						</menu>
 					</details>
 				{/if}

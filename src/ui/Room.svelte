@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { t, type Key } from '../lib/i18n.svelte';
 	import type { Meeting } from '../lib/meeting.svelte';
+	import { support } from '../lib/support';
 	import Chat from './Chat.svelte';
 	import Icon from './Icon.svelte';
 	import People from './People.svelte';
@@ -9,32 +11,41 @@
 	let { meeting }: { meeting: Meeting } = $props();
 
 	const present = $derived(meeting.perms.includes('present'));
-	const canRecord = $derived(meeting.perms.includes('record'));
+	const noPresent = $derived(present ? null : ('why.present' as const));
+	const noShare = $derived(support.share ? noPresent : ('why.share' as const));
+	const noRecord = $derived(meeting.perms.includes('record') ? null : ('why.record' as const));
 
 	let settings = $state(false);
 	let more = $state(false);
-	const canShare = !!navigator.mediaDevices?.getDisplayMedia;
-
-	function run(f: () => void) {
-		more = false;
-		f();
-	}
+	let warning = $state('');
 	let layout = $state<'grid' | 'speaker'>('grid');
 	let panel = $state<'chat' | 'people' | null>(null);
 	let seen = $state(0);
 	const unread = $derived(panel === 'chat' ? 0 : meeting.messages.length - seen);
 	const hands = $derived(meeting.people.filter(p => p.hand).length);
 
-	$effect(() => {
-		if (panel === 'chat') seen = meeting.messages.length;
-	});
+	function run(why: Key | null, f: () => void) {
+		more = false;
+		if (why) warning = t(why);
+		else f();
+	}
 
 	const toggle = (p: 'chat' | 'people') => (panel = panel === p ? null : p);
 
 	$effect(() => {
+		if (panel === 'chat') seen = meeting.messages.length;
+	});
+
+	$effect(() => {
 		if (!meeting.notice) return;
-		const t = setTimeout(() => (meeting.notice = ''), 5000);
-		return () => clearTimeout(t);
+		const id = setTimeout(() => (meeting.notice = ''), 5000);
+		return () => clearTimeout(id);
+	});
+
+	$effect(() => {
+		if (!warning) return;
+		const id = setTimeout(() => (warning = ''), 4000);
+		return () => clearTimeout(id);
 	});
 </script>
 
@@ -44,7 +55,7 @@
 
 <div class="room">
 	{#if meeting.recording}
-		<p class="rec" role="status"><Icon name="circle-dot" />녹화 중</p>
+		<p class="rec" role="status"><Icon name="circle-dot" />{t('room.recording')}</p>
 	{/if}
 	{#if meeting.notice}
 		<p class="notice" role="status">{meeting.notice}</p>
@@ -58,50 +69,71 @@
 		{/if}
 	</div>
 	<nav>
-		{#if present}
-			<button class:off={!meeting.mic} title={meeting.mic ? '마이크 끄기' : '마이크 켜기'} onclick={() => meeting.toggleMic()}>
-				<Icon name={meeting.mic ? 'mic' : 'mic-off'} />
-			</button>
-			<button class:off={!meeting.cam} title={meeting.cam ? '카메라 끄기' : '카메라 켜기'} onclick={() => meeting.toggleCam()}>
-				<Icon name={meeting.cam ? 'video' : 'video-off'} />
-			</button>
+		{#if warning}
+			<p class="warning" role="alert"><Icon name="triangle-alert" />{warning}</p>
 		{/if}
+		<button
+			class:off={present && !meeting.mic}
+			aria-disabled={!!noPresent}
+			title={noPresent ? t(noPresent) : t(meeting.mic ? 'tb.micOff' : 'tb.micOn')}
+			onclick={() => run(noPresent, () => meeting.toggleMic())}
+		>
+			<Icon name={meeting.mic ? 'mic' : 'mic-off'} />
+		</button>
+		<button
+			class:off={present && !meeting.cam}
+			aria-disabled={!!noPresent}
+			title={noPresent ? t(noPresent) : t(meeting.cam ? 'tb.camOff' : 'tb.camOn')}
+			onclick={() => run(noPresent, () => meeting.toggleCam())}
+		>
+			<Icon name={meeting.cam ? 'video' : 'video-off'} />
+		</button>
 		<div class="extra" class:open={more}>
-			{#if present && canShare}
-				<button aria-pressed={meeting.screen} title="화면 공유" onclick={() => run(() => meeting.toggleScreen())}>
-					<Icon name="monitor-up" />
-				</button>
-			{/if}
-			{#if canRecord}
-				<button class:recording={meeting.recording} title={meeting.recording ? '녹화 중지' : '녹화 시작'} onclick={() => run(() => meeting.record())}>
-					<Icon name="circle-dot" />
-				</button>
-			{/if}
 			<button
-				title={layout === 'grid' ? '발화자 보기' : '타일 보기'}
-				onclick={() => run(() => (layout = layout === 'grid' ? 'speaker' : 'grid'))}
+				aria-pressed={meeting.screen}
+				aria-disabled={!!noShare}
+				title={noShare ? t(noShare) : t('tb.share')}
+				onclick={() => run(noShare, () => meeting.toggleScreen())}
+			>
+				<Icon name="monitor-up" />
+			</button>
+			<button
+				class:recording={meeting.recording}
+				aria-disabled={!!noRecord}
+				title={noRecord ? t(noRecord) : t(meeting.recording ? 'tb.recStop' : 'tb.recStart')}
+				onclick={() => run(noRecord, () => meeting.record())}
+			>
+				<Icon name="circle-dot" />
+			</button>
+			<button
+				title={t(layout === 'grid' ? 'tb.speaker' : 'tb.grid')}
+				onclick={() => run(null, () => (layout = layout === 'grid' ? 'speaker' : 'grid'))}
 			>
 				<Icon name={layout === 'grid' ? 'user-square' : 'layout-grid'} />
 			</button>
-			<button aria-pressed={meeting.hand} title={meeting.hand ? '손 내리기' : '손 들기'} onclick={() => run(() => meeting.raiseHand())}>
+			<button
+				aria-pressed={meeting.hand}
+				title={t(meeting.hand ? 'tb.handDown' : 'tb.handUp')}
+				onclick={() => run(null, () => meeting.raiseHand())}
+			>
 				<Icon name="hand" />
 			</button>
-			<button title="설정" onclick={() => run(() => (settings = true))}>
+			<button title={t('tb.settings')} onclick={() => run(null, () => (settings = true))}>
 				<Icon name="settings" />
 			</button>
 		</div>
-		<button class="more" aria-pressed={more} title="더보기" onclick={() => (more = !more)}>
+		<button class="more" aria-pressed={more} title={t('tb.more')} onclick={() => (more = !more)}>
 			<Icon name="ellipsis" />
 		</button>
-		<button aria-pressed={panel === 'people'} title="참가자" onclick={() => toggle('people')}>
+		<button aria-pressed={panel === 'people'} title={t('tb.people')} onclick={() => toggle('people')}>
 			<Icon name="users" />
 			{#if hands > 0}<span class="badge hands">{hands}</span>{/if}
 		</button>
-		<button aria-pressed={panel === 'chat'} title="채팅" onclick={() => toggle('chat')}>
+		<button aria-pressed={panel === 'chat'} title={t('tb.chat')} onclick={() => toggle('chat')}>
 			<Icon name="message-square" />
 			{#if unread > 0}<span class="badge">{unread}</span>{/if}
 		</button>
-		<button class="danger" title="나가기" onclick={() => meeting.leave()}>
+		<button class="danger" title={t('tb.leave')} onclick={() => meeting.leave()}>
 			<Icon name="phone-off" />
 		</button>
 	</nav>
@@ -195,6 +227,26 @@
 		.extra.open {
 			display: flex;
 		}
+	}
+	.warning {
+		position: absolute;
+		bottom: calc(100% + 4.25rem);
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 4;
+		width: max-content;
+		max-width: calc(100vw - 2rem);
+		margin: 0;
+		display: flex;
+		align-items: center;
+		gap: .5rem;
+		padding: .625rem 1rem;
+		border: 1px solid #fbbc04;
+		border-radius: .75rem;
+		background: #2e2610;
+		color: #ffe08a;
+		font-size: .875rem;
+		box-shadow: 0 .5rem 1.5rem rgb(0 0 0 / .4);
 	}
 	.badge {
 		position: absolute;

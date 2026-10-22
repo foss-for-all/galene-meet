@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import { t } from '../lib/i18n.svelte';
 	import type { Meeting } from '../lib/meeting.svelte';
 
 	let { meeting }: { meeting: Meeting } = $props();
@@ -34,7 +35,7 @@
 			<li class:mine={m.mine} class:me={m.me}>
 				<header>
 					<b>{m.name}</b>
-					{#if m.private}<span>귓속말</span>{/if}
+					{#if m.private}<span>{t('chat.private')}</span>{/if}
 					<time datetime={m.time.toISOString()}>{fmt.format(m.time)}</time>
 				</header>
 				<p>
@@ -46,7 +47,7 @@
 		{/each}
 	</ol>
 	<form onsubmit={submit}>
-		<input bind:value={text} placeholder="메시지" aria-label="메시지" autocomplete="off" />
+		<input bind:value={text} placeholder={t('chat.placeholder')} aria-label={t('chat.placeholder')} autocomplete="off" />
 	</form>
 </aside>
 

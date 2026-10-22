@@ -6,6 +6,8 @@
 	--accent: #2565e0;
 	--accent-fg: #ffffff;
 	--err: #b3261e;
+	--warn: #b07800;
+	--warn-bg: #fff4d6;
 	--danger: #d93025;
 	--stage: #111318;
 	--tile: #23262e;
@@ -18,6 +20,8 @@
 		--accent: #6fa3ff;
 		--accent-fg: #0a1630;
 		--err: #ff8a80;
+		--warn: #fbbc04;
+		--warn-bg: #2e2610;
 	}
 }
 * { box-sizing: border-box; }
@@ -45,3 +49,4 @@ button { cursor: pointer; }
 .primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
 .danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
 [hidden] { display: none !important; }
+[aria-disabled='true'] { opacity: .4; cursor: not-allowed; }

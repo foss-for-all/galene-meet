@@ -1,3 +1,4 @@
+import { t, type Key } from './i18n.svelte';
 import { ServerConnection, type Credentials, type Stream } from '../../vendor/galene/protocol.js';
 
 export type Tile = {
@@ -19,6 +20,22 @@ export type Message = {
 	mine: boolean;
 	private: boolean;
 };
+
+const SERVER: Record<string, Key> = {
+	'there are no operators in this group': 'err.noOp',
+};
+
+const MEDIA: Record<string, Key> = {
+	NotAllowedError: 'err.denied',
+	SecurityError: 'err.denied',
+	NotFoundError: 'err.noDevice',
+	OverconstrainedError: 'err.noDevice',
+	NotReadableError: 'err.busy',
+};
+
+function server(msg: string) {
+	return SERVER[msg] ? t(SERVER[msg]) : msg;
+}
 
 export type Person = {
 	id: string;
@@ -93,7 +110,7 @@ export class Meeting {
 				location.href = message;
 				break;
 			case 'fail':
-				this.error = message;
+				this.error = server(message);
 				sc.close();
 				break;
 			case 'leave':
@@ -122,14 +139,16 @@ export class Meeting {
 		sc.onusermessage = (_id, _dest, _username, _time, _privileged, kind, _error, message) => {
 			switch (kind) {
 			case 'error':
+				this.error = this.notice = server(String(message));
+				break;
 			case 'warning':
 			case 'info':
-				this.notice = String(message);
+				this.notice = server(String(message));
 				break;
 			case 'mute':
 				this.#up('camera')?.stream?.getAudioTracks().forEach(t => (t.enabled = false));
 				this.mic = false;
-				this.notice = '마이크가 꺼졌습니다.';
+				this.notice = t('notice.muted');
 				break;
 			case 'clearchat':
 				this.messages = [];
@@ -184,6 +203,7 @@ export class Meeting {
 	}
 
 	leave() {
+		this.error = '';
 		this.sc.close();
 	}
 
@@ -280,7 +300,7 @@ export class Meeting {
 		try {
 			localStorage.setItem('meet-bg-image', this.bgImage);
 		} catch {
-			this.notice = '배경 이미지가 너무 커서 기억하지 못합니다.';
+			this.notice = t('notice.bgTooBig');
 		}
 		const c = this.#up('camera');
 		if (c) await this.#camera(!!c.stream?.getAudioTracks().length, this.cam).catch(this.#fail);
@@ -296,7 +316,8 @@ export class Meeting {
 	}
 
 	#fail = (e: unknown) => {
-		this.notice = e instanceof Error ? e.message : String(e);
+		const key = e instanceof Error && MEDIA[e.name];
+		this.notice = key ? t(key) : e instanceof Error ? e.message : String(e);
 	};
 
 	async toggleMic() {

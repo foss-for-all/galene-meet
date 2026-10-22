@@ -25,3 +25,8 @@ that is not a file serves `index.html`.
 
 Background effects use the MediaPipe files Galene serves under
 `/third-party/tasks-vision/`.
+
+## Translations
+
+Strings live in `src/lib/locales/`.  To add a language, copy `en.ts`,
+translate it, and register it in `src/lib/i18n.svelte.ts`.

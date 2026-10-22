@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { ROOM } from '../lib/config';
+	import { t } from '../lib/i18n.svelte';
+	import { support } from '../lib/support';
+	import Lang from './Lang.svelte';
 	import Logo from './Logo.svelte';
 
 	let {
@@ -33,9 +36,10 @@
 
 	function submit(e: SubmitEvent) {
 		e.preventDefault();
+		if (!support.webrtc) return;
 		room = room.trim().toLowerCase();
 		if (!ROOM.test(room)) {
-			msg = '방 이름은 영문 소문자, 숫자, -만 씁니다.';
+			msg = t('lobby.badRoom');
 			return;
 		}
 		if (e.submitter?.getAttribute('value') === 'login') {
@@ -44,7 +48,7 @@
 		}
 		name = name.trim();
 		if (!member && !name) {
-			msg = '이름을 입력하세요.';
+			msg = t('lobby.noName');
 			return;
 		}
 		msg = '';
@@ -56,25 +60,29 @@
 <main>
 	<Logo />
 	<h1>Galene</h1>
+	{#if !support.webrtc}
+		<p class="unsupported" role="alert">{t('lobby.unsupported')}</p>
+	{/if}
 	<form onsubmit={submit} novalidate>
-		<label for="room">방 이름</label>
+		<label for="room">{t('lobby.room')}</label>
 		<div class="row">
 			<input id="room" bind:value={room} maxlength="64" autocomplete="off" autocapitalize="none" spellcheck="false" />
-			<button type="button" onclick={randomRoom}>무작위</button>
+			<button type="button" onclick={randomRoom}>{t('lobby.random')}</button>
 		</div>
 		{#if member}
-			<button type="submit" class="primary">입장</button>
-			<button type="button" class="link" onclick={onlogout}>로그아웃</button>
+			<button type="submit" class="primary" aria-disabled={!support.webrtc}>{t('lobby.join')}</button>
+			<button type="button" class="link" onclick={onlogout}>{t('lobby.logout')}</button>
 		{:else}
-			<label for="name">이름</label>
+			<label for="name">{t('lobby.name')}</label>
 			<input id="name" bind:value={name} maxlength="64" autocomplete="nickname" />
 			<div class="row">
-				<button type="submit" value="login" class="primary">회원 로그인</button>
-				<button type="submit" value="guest">손님으로 입장</button>
+				<button type="submit" value="login" class="primary" aria-disabled={!support.webrtc}>{t('lobby.login')}</button>
+				<button type="submit" value="guest" aria-disabled={!support.webrtc}>{t('lobby.guest')}</button>
 			</div>
 		{/if}
 	</form>
 	<p role="alert">{shown}</p>
+	<Lang />
 </main>
 
 <style>
@@ -117,6 +125,13 @@
 		height: auto;
 		font-size: .875rem;
 		text-decoration: underline;
+	}
+	.unsupported {
+		padding: .75rem 1rem;
+		border: 1px solid var(--warn);
+		border-radius: .5rem;
+		color: var(--fg);
+		background: var(--warn-bg);
 	}
 	p {
 		margin: 0;

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Tile } from '../lib/meeting.svelte';
+	import { t } from '../lib/i18n.svelte';
 	import Icon from './Icon.svelte';
 
 	let {
@@ -26,7 +27,7 @@
 	{#if !video}
 		<div class="avatar">{tile.name.slice(0, 1).toUpperCase()}</div>
 	{/if}
-	<button class="pin" class:on={pinned} title={pinned ? '고정 해제' : '고정'} onclick={onpin}>
+	<button class="pin" class:on={pinned} title={t(pinned ? 'tile.unpin' : 'tile.pin')} onclick={onpin}>
 		<Icon name={pinned ? 'pin-off' : 'pin'} />
 	</button>
 	<figcaption>

@@ -1,4 +1,5 @@
 import { CLIENT, SSO } from './config';
+import { t } from './i18n.svelte';
 
 const PENDING = 'meet-login';
 const TOKENS = 'meet-tokens';
@@ -45,7 +46,7 @@ async function grant(body: Record<string, string>): Promise<string> {
 	try {
 		res = await fetch(`${SSO}/token`, { method: 'POST', body: new URLSearchParams({ client_id: CLIENT, ...body }) });
 	} catch {
-		throw new Error('로그인 서버에 연결하지 못했습니다.');
+		throw new Error(t('auth.unreachable'));
 	}
 	const json = await res.json().catch(() => ({}));
 	if (!res.ok || !json.access_token)
@@ -58,7 +59,7 @@ export async function callback(params: URLSearchParams): Promise<string> {
 	const saved = take<{ state: string; verifier: string; room: string }>(sessionStorage, PENDING, true);
 	// State first: otherwise any link could put its own error_description on the page.
 	if (!saved || saved.state !== params.get('state'))
-		throw new Error('로그인 요청이 맞지 않습니다. 다시 로그인하세요.');
+		throw new Error(t('auth.mismatch'));
 	if (params.has('error'))
 		throw new Error(params.get('error_description') || params.get('error')!);
 	await grant({

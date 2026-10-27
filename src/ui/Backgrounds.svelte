@@ -13,6 +13,7 @@
 	let images = $state<Image[]>([]);
 	let warned = $state(false);
 	let loading = $state(false);
+	let failed = $state(false);
 
 	const reload = () => list().then(l => (images = l)).catch(() => {});
 	reload();
@@ -32,11 +33,14 @@
 		}
 		if (!file) return;
 		loading = true;
+		failed = false;
 		try {
 			const { loadImage } = await import('../lib/background');
 			const bgId = await add(await loadImage(file));
 			await reload();
 			onchange({ background: 'image', bgId });
+		} catch {
+			failed = true;
 		} finally {
 			loading = false;
 		}
@@ -83,6 +87,9 @@
 			<input type="file" accept="image/*" disabled={loading} onchange={upload} />
 		</label>
 	</div>
+	{#if failed}
+		<p class="warn" role="alert"><Icon name="triangle-alert" />{t('bg.failed')}</p>
+	{/if}
 	{#if warned || !support.effects}
 		<p class="warn" role="alert"><Icon name="triangle-alert" />{t('why.effects')}</p>
 	{/if}

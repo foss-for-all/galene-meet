@@ -247,4 +247,5 @@ export default {
 	'tile.stats': 'Connection info',
 	'tile.volume': 'Volume',
 	'why.file': 'This browser cannot play files to the meeting.',
+	'bg.failed': 'Could not read the image. Use a JPG, PNG or WebP picture.',
 } satisfies Record<keyof typeof ko, string>;

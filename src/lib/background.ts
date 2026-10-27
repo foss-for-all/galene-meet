@@ -173,11 +173,35 @@ export async function applyEffect(
 	};
 }
 
+const SIDE = 1920;
+
+function size(file: Blob): Promise<{ w: number; h: number }> {
+	return new Promise((resolve, reject) => {
+		const img = new Image();
+		const url = URL.createObjectURL(file);
+		img.onload = () => {
+			URL.revokeObjectURL(url);
+			resolve({ w: img.naturalWidth, h: img.naturalHeight });
+		};
+		img.onerror = () => {
+			URL.revokeObjectURL(url);
+			reject(new Error('unreadable image'));
+		};
+		img.src = url;
+	});
+}
+
+// The decoder scales down while decoding, so a large phone photo never sits in memory at full size.
 export async function loadImage(file: Blob): Promise<string> {
-	const img = await createImageBitmap(file);
-	const s = Math.min(1, 1280 / Math.max(img.width, img.height));
-	const c = new OffscreenCanvas(Math.round(img.width * s), Math.round(img.height * s));
-	c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+	const { w, h } = await size(file);
+	const s = Math.min(1, SIDE / Math.max(w, h));
+	const img = await createImageBitmap(file, {
+		resizeWidth: Math.max(1, Math.round(w * s)),
+		resizeHeight: Math.max(1, Math.round(h * s)),
+		resizeQuality: 'high',
+	});
+	const c = new OffscreenCanvas(img.width, img.height);
+	c.getContext('2d')!.drawImage(img, 0, 0);
 	img.close();
 	const blob = await c.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
 	return new Promise(resolve => {

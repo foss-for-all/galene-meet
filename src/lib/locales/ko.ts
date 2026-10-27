@@ -245,4 +245,5 @@ export default {
 	'tile.stats': '연결 정보',
 	'tile.volume': '볼륨',
 	'why.file': '이 브라우저는 파일 재생 송출을 지원하지 않습니다.',
+	'bg.failed': '이미지를 읽지 못했습니다. JPG, PNG, WebP 사진을 쓰세요.',
 };

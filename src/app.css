@@ -44,6 +44,7 @@ input, button {
 	color: inherit;
 }
 input { min-width: 0; }
+select { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
 button { cursor: pointer; transition: transform 80ms ease, background-color 120ms ease, border-color 120ms ease; }
 button:not([aria-disabled='true']):active { transform: scale(.95); }
 @media (prefers-reduced-motion: reduce) { button { transition: none; } button:active { transform: none; } }

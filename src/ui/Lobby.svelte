@@ -114,6 +114,7 @@
 		width: min(22rem, 100% - 2rem);
 		margin: auto;
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 1.25rem;
 		justify-items: center;
 	}

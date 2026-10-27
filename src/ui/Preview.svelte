@@ -142,7 +142,9 @@
 <style>
 	section {
 		width: 100%;
+		min-width: 0;
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: .5rem;
 	}
 	.view {
@@ -200,6 +202,7 @@
 	}
 	.devices {
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: .5rem;
 		margin-top: .5rem;
 	}

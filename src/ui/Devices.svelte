@@ -42,11 +42,16 @@
 <style>
 	label {
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		min-width: 0;
 		gap: .25rem;
 		font-size: .875rem;
 		font-weight: 600;
 	}
 	select {
+		width: 100%;
+		min-width: 0;
+		text-overflow: ellipsis;
 		font: inherit;
 		font-size: 1rem;
 		font-weight: 400;

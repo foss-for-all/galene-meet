@@ -88,6 +88,7 @@
 		background: #1f2229;
 		color: #fff;
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 1rem;
 	}
 	dialog::backdrop {

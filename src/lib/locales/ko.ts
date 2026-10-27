@@ -113,4 +113,5 @@ export default {
 	'adv.processing': '잡음, 에코 제거',
 	'adv.blackboard': '칠판 모드 (1080p, 선명하게)',
 	'adv.mirror': '내 화면 좌우 반전',
+	'auth.noHost': '이 계정은 회의를 열 권한이 없습니다. 손님으로 입장하세요.',
 };

@@ -81,6 +81,17 @@ export function loggedIn(): boolean {
 	return take<Tokens>(sessionStorage, TOKENS) !== null;
 }
 
+// Keycloak puts permissions only into tokens of users allowed to host (infra-docs galene-kc.py HOSTS).
+export function canHost(): boolean {
+	const t = take<Tokens>(sessionStorage, TOKENS);
+	try {
+		const claims = JSON.parse(atob(t!.access.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+		return Array.isArray(claims.permissions) && claims.permissions.includes('op');
+	} catch {
+		return false;
+	}
+}
+
 export async function token(): Promise<string | null> {
 	const t = take<Tokens>(sessionStorage, TOKENS);
 	if (!t) return null;

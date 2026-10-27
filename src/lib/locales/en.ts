@@ -115,4 +115,5 @@ export default {
 	'adv.processing': 'Noise and echo suppression',
 	'adv.blackboard': 'Blackboard mode (1080p, sharp)',
 	'adv.mirror': 'Mirror my video',
+	'auth.noHost': 'This account may not host meetings. Join as a guest.',
 } satisfies Record<keyof typeof ko, string>;

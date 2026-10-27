@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { callback, loggedIn, login, logout, token } from './lib/auth';
+	import { callback, canHost, loggedIn, login, logout, token } from './lib/auth';
 	import { autoplay } from './lib/autoplay.svelte';
 	import { GROUP, ROOM } from './lib/config';
 	import { t } from './lib/i18n.svelte';
@@ -22,7 +22,7 @@
 	const params = new URLSearchParams(location.search);
 	// Old portal links: /?room=<name>.
 	let room = $state(normalize(location.pathname === '/' && params.has('room') ? '/' + params.get('room') : location.pathname));
-	let member = $state(loggedIn());
+	let member = $state(loggedIn() && canHost());
 	let error = $state('');
 	let meeting = $state<Meeting | null>(null);
 	let name = '';
@@ -38,6 +38,11 @@
 		callback(params)
 			.then(r => {
 				room = r.room;
+				if (!canHost()) {
+					logout();
+					error = t('auth.noHost');
+					return;
+				}
 				member = true;
 				if (r.resume) join(localStorage.getItem('meet-name') ?? '', r.resume);
 			})

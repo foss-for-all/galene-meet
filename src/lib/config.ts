@@ -1,4 +1,5 @@
-export const SSO: string = import.meta.env.VITE_SSO;
+// Empty: no single sign-on, people log in with Galene usernames and passwords.
+export const SSO: string = import.meta.env.VITE_SSO || '';
 export const CLIENT: string = import.meta.env.VITE_CLIENT || 'galene';
 export const GROUP: string = import.meta.env.VITE_GROUP || 'meet/';
 // Becomes a Galene group path and a recordings folder: no '.', '/' or escaping.

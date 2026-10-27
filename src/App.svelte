@@ -2,7 +2,7 @@
 	import { untrack } from 'svelte';
 	import { callback, canHost, loggedIn, login, logout, token } from './lib/auth';
 	import { autoplay } from './lib/autoplay.svelte';
-	import { GROUP, ROOM } from './lib/config';
+	import { GROUP, ROOM, SSO } from './lib/config';
 	import { t } from './lib/i18n.svelte';
 	import { Meeting } from './lib/meeting.svelte';
 	import Lobby from './ui/Lobby.svelte';
@@ -27,10 +27,11 @@
 	const invite = params.get('token');
 	// Old portal links: /?room=<name>.
 	let room = $state(normalize(location.pathname === '/' && params.has('room') ? '/' + params.get('room') : location.pathname));
-	let member = $state(loggedIn() && canHost());
+	let member = $state(!!SSO && loggedIn() && canHost());
 	let error = $state('');
 	let meeting = $state<Meeting | null>(null);
 	let name = '';
+	let password = '';
 	let media = { cam: false, mic: false };
 	let retry = $state<'wait' | 'reconnect' | null>(null);
 	let ended = $state(false);
@@ -40,7 +41,7 @@
 
 	const live = (() => {
 		try {
-			return JSON.parse(sessionStorage.getItem(LIVE) ?? 'null') as { room: string; name: string; media: typeof media } | null;
+			return JSON.parse(sessionStorage.getItem(LIVE) ?? 'null') as { room: string; name: string; password?: string; media: typeof media } | null;
 		} catch {
 			return null;
 		}
@@ -48,10 +49,10 @@
 	let resumeRecording = false;
 	if (live && live.room === untrack(() => room) && !params.has('code') && !params.has('error')) {
 		resumeRecording = !!(live as { recording?: boolean }).recording;
-		queueMicrotask(() => join(live.name, live.media));
+		queueMicrotask(() => join(live.name, live.media, live.password));
 	}
 
-	if (params.has('code') || params.has('error')) {
+	if (SSO && (params.has('code') || params.has('error'))) {
 		history.replaceState(null, '', '/');
 		callback(params)
 			.then(r => {
@@ -77,7 +78,7 @@
 		meeting.start(media);
 		const m = meeting;
 		const save = () => {
-			if (!m.closed) sessionStorage.setItem(LIVE, JSON.stringify({ room, name, media: m.want, recording: m.recording }));
+			if (!m.closed) sessionStorage.setItem(LIVE, JSON.stringify({ room, name, password, media: m.want, recording: m.recording }));
 		};
 		// Our own reload stopped the recording (autokick removes the recorder with the last host): start it again.
 		if (resumeRecording) {
@@ -123,10 +124,11 @@
 		return () => clearTimeout(id);
 	});
 
-	async function join(n: string, want = media) {
+	async function join(n: string, want = media, pw = password) {
 		if (busy) return;
 		const g = ++gen;
 		name = n;
+		password = pw;
 		media = want;
 		error = '';
 		if (!retry) ended = false;
@@ -156,7 +158,7 @@
 		autoplay.blocked = false;
 		meeting = m;
 		try {
-			const creds = tok ? { type: 'token' as const, token: tok } : invite ? { type: 'token' as const, token: invite } : { type: 'password' as const, password: '' };
+			const creds = tok ? { type: 'token' as const, token: tok } : invite ? { type: 'token' as const, token: invite } : { type: 'password' as const, password };
 			await m.open(GROUP + room, tok ? null : n, creds, n);
 		} catch (e) {
 			if (g !== gen) return;
@@ -181,11 +183,12 @@
 {#if meeting?.joined}
 	<Room {meeting} />
 {:else if retry}
-	<Waiting {room} mode={retry === 'reconnect' ? 'reconnect' : ended ? 'ended' : 'wait'} {member} onlogin={signin} oncancel={cancel} />
+	<Waiting {room} mode={retry === 'reconnect' ? 'reconnect' : ended ? 'ended' : 'wait'} {member} onlogin={SSO ? signin : undefined} oncancel={cancel} />
 {:else}
 	<Lobby
 		bind:room
 		{member}
+		sso={!!SSO}
 		invited={!!invite}
 		{error}
 		{busy}

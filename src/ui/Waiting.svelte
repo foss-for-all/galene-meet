@@ -13,7 +13,7 @@
 		room: string;
 		mode: 'wait' | 'ended' | 'reconnect';
 		member: boolean;
-		onlogin: () => void;
+		onlogin?: () => void;
 		oncancel: () => void;
 	} = $props();
 
@@ -36,7 +36,7 @@
 		<button onclick={copy}>{t(copied ? 'wait.copied' : 'wait.copy')}</button>
 	</div>
 	<div class="row">
-		{#if !member && mode !== 'reconnect'}
+		{#if onlogin && !member && mode !== 'reconnect'}
 			<button class="primary" onclick={onlogin}>{t('lobby.login')}</button>
 		{/if}
 		<button onclick={oncancel}>{t('wait.cancel')}</button>

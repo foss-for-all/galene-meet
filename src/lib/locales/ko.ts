@@ -2,6 +2,7 @@ export default {
 	'lobby.room': '방 이름',
 	'lobby.random': '무작위',
 	'lobby.name': '이름',
+	'lobby.password': '비밀번호 (선택)',
 	'lobby.join': '입장',
 	'lobby.logout': '로그아웃',
 	'lobby.login': '회원 로그인',

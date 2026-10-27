@@ -22,7 +22,7 @@ const csp = (sso: string) => ({
 			"style-src 'self' 'unsafe-inline'",
 			"img-src 'self' data: blob:",
 			"media-src 'self' blob:",
-			`connect-src 'self' data: ${new URL(sso).origin}`,
+			`connect-src 'self' data:${sso && ' ' + new URL(sso).origin}`,
 			"worker-src 'self' blob:",
 			"object-src 'none'",
 			"base-uri 'none'",
@@ -32,11 +32,10 @@ const csp = (sso: string) => ({
 	},
 });
 
-export default defineConfig(({ command, mode }) => {
+export default defineConfig(({ mode }) => {
 	const { VITE_SSO } = loadEnv(mode, process.cwd());
-	if (command === 'build' && !VITE_SSO) throw new Error('VITE_SSO is not set; see README.md');
 	return {
-		plugins: [svelte(), protocol, csp(VITE_SSO)],
+		plugins: [svelte(), protocol, csp(VITE_SSO ?? '')],
 		preview: {
 			proxy: {
 				'/ws': { target: galene, ws: true },

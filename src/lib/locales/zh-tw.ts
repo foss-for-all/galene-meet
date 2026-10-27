@@ -4,6 +4,7 @@ export default {
 	'lobby.room': '會議室名稱',
 	'lobby.random': '隨機',
 	'lobby.name': '你的名稱',
+	'lobby.password': '密碼（選填）',
 	'lobby.join': '加入',
 	'lobby.logout': '登出',
 	'lobby.login': '會員登入',

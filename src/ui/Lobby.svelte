@@ -9,6 +9,7 @@
 	let {
 		room = $bindable(),
 		member,
+		sso,
 		invited,
 		error,
 		busy,
@@ -19,16 +20,18 @@
 	}: {
 		room: string;
 		member: boolean;
+		sso: boolean;
 		invited: boolean;
 		error: string;
 		busy: boolean;
-		onjoin: (name: string, media: { cam: boolean; mic: boolean }) => void;
+		onjoin: (name: string, media: { cam: boolean; mic: boolean }, password?: string) => void;
 		oncancel: () => void;
 		onlogin: () => void;
 		onlogout: () => void;
 	} = $props();
 
 	let name = $state(localStorage.getItem('meet-name') ?? '');
+	let password = $state('');
 	let msg = $state('');
 	let av = JSON.parse(localStorage.getItem('meet-av') ?? '{}');
 	let cam = $state(!!av.cam);
@@ -68,7 +71,7 @@
 		}
 		msg = '';
 		localStorage.setItem('meet-name', name);
-		onjoin(name, { cam, mic });
+		onjoin(name, { cam, mic }, password);
 	}
 </script>
 
@@ -96,10 +99,18 @@
 			<label for="name">{t('lobby.name')}</label>
 			<input id="name" bind:value={name} maxlength="64" autocomplete="nickname" />
 			{#if invited}<small class="invited">{t('lobby.invited')}</small>{/if}
-			<div class="row">
-				<button type="submit" value="login" class="primary" aria-disabled={!support.webrtc}>{t('lobby.login')}</button>
-				<button type="submit" value="guest" aria-disabled={!support.webrtc || busy}>{t('lobby.guest')}</button>
-			</div>
+			{#if sso}
+				<div class="row">
+					<button type="submit" value="login" class="primary" aria-disabled={!support.webrtc}>{t('lobby.login')}</button>
+					<button type="submit" value="guest" aria-disabled={!support.webrtc || busy}>{t('lobby.guest')}</button>
+				</div>
+			{:else}
+				{#if !invited}
+					<label for="password">{t('lobby.password')}</label>
+					<input id="password" type="password" bind:value={password} autocomplete="current-password" />
+				{/if}
+				<button type="submit" class="primary" aria-disabled={!support.webrtc || busy}>{t('lobby.join')}</button>
+			{/if}
 		{/if}
 	</form>
 	{#if busy}

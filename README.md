@@ -8,7 +8,8 @@ Web client for [Galene](https://galene.org) with OpenID Connect login.
     npm install
     npm run build
 
-Set `VITE_SSO` in `.env` first; the build fails without it.
+Settings are in `.env`.  Without `VITE_SSO` there is no single sign-on and
+people log in with the usernames and passwords of the Galene group.
 
 The result is in `dist/`.
 

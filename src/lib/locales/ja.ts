@@ -4,6 +4,7 @@ export default {
 	'lobby.room': 'ルーム名',
 	'lobby.random': 'ランダム',
 	'lobby.name': '名前',
+	'lobby.password': 'パスワード（任意）',
 	'lobby.join': '参加',
 	'lobby.logout': 'ログアウト',
 	'lobby.login': 'メンバーとしてログイン',

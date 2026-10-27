@@ -23,6 +23,9 @@ rejects the websocket origin.
 Serve `dist/` and send `/ws`, `/group/*` and `/third-party/*` to Galene.  Any other path
 that is not a file serves `index.html`.
 
+`logo.svg` is the favicon and the lobby logo.  Replace it in the served
+directory to use your own.
+
 Background effects use the MediaPipe files Galene serves under
 `/third-party/tasks-vision/`.
 

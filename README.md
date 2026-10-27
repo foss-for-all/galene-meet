@@ -4,11 +4,11 @@ Web client for [Galene](https://galene.org) with OpenID Connect login.
 
 ## Build
 
+    cp .env.example .env
     npm install
-    VITE_SSO=https://sso.example.org/realms/example/protocol/openid-connect npm run build
+    npm run build
 
-`VITE_SSO` is the OpenID Connect endpoint base of the identity provider; it can
-also go in `.env.local`.  The client id is `galene`.
+Set `VITE_SSO` in `.env` first; the build fails without it.
 
 The result is in `dist/`.
 

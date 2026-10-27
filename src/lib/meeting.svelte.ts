@@ -132,6 +132,7 @@ export class Meeting {
 	adv = $state<Advanced>(advanced());
 	reactions = $state<{ id: number; name: string; icon: Reaction }[]>([]);
 	#reacted = 0;
+	#reactedBy = new Map<string, number>();
 	speaking = $state<string[]>([]);
 	locked = $state(false);
 	ptt = $state(false);
@@ -227,12 +228,14 @@ export class Meeting {
 				location.href = message;
 				break;
 			case 'fail':
+				this.#settled = false;
 				this.rejected = true;
 				this.waiting = message === NO_OP;
 				this.error = server(message);
 				sc.close();
 				break;
 			case 'leave':
+				this.#settled = false;
 				sc.close();
 				break;
 			}
@@ -247,13 +250,14 @@ export class Meeting {
 			s.onclose = bump;
 			s.setStatsInterval(300);
 		};
-		sc.onchat = (id, source, dest, username, time, _privileged, history, kind, message) => {
+		sc.onchat = (id, source, dest, username, time, privileged, history, kind, message) => {
 			if (!history && source !== sc.id && this.#settled) play('chat');
 			this.messages.push({
 				key: id ?? crypto.randomUUID(),
 				id,
 				source,
-				name: source ? this.#display(source, username) : username || t('chat.server'),
+				// Galene accepts chat without a source from anyone; only a privileged one is the server.
+				name: source ? this.#display(source, username) : privileged ? username || t('chat.server') : `${username || '?'} ${t('chat.unverified')}`,
 				time,
 				text: message,
 				me: kind === 'me',
@@ -263,6 +267,9 @@ export class Meeting {
 		};
 		sc.onusermessage = (source, _dest, username, _time, privileged, kind, _error, message) => {
 			if (kind === 'reaction') {
+				const now = Date.now();
+				if (source && now - (this.#reactedBy.get(source) ?? 0) < 1000) return;
+				if (source) this.#reactedBy.set(source, now);
 				if (REACTIONS.includes(message as Reaction))
 					this.#show(this.#display(source, username), message as Reaction, source === sc.id);
 				return;
@@ -286,10 +293,14 @@ export class Meeting {
 			}
 			case 'token':
 				if (_error) this.local(`${t('invite.failed')}: ${message}`);
-				else {
+				else if (this.#making) {
 					this.invite = this.link((message as Token).token);
 					this.local(this.invite);
+				} else {
+					// An edittoken reply: the list shows the new expiry.
+					this.listInvites();
 				}
+				this.#making = false;
 				break;
 			case 'tokenlist':
 				this.tokens = _error ? [] : ((message as Token[]) ?? []);
@@ -303,6 +314,7 @@ export class Meeting {
 				break;
 			}
 			case 'mute':
+				this.ptt = false;
 				this.#up('camera')?.stream?.getAudioTracks().forEach(t => (t.enabled = false));
 				this.mic = false;
 				this.want.mic = false;
@@ -324,6 +336,7 @@ export class Meeting {
 			this.error ||= t('err.connection');
 		};
 		sc.onclose = () => {
+			this.#settled = false;
 			clearInterval(this.#timer);
 			this.#mon?.stop();
 			this.closed = true;
@@ -487,12 +500,15 @@ export class Meeting {
 		this.sc.groupAction('clearchat');
 	}
 
+	#making = false;
+
 	makeInvite(o: { username?: string; expires: number; permissions: string[] }) {
+		this.#making = true;
 		const { username, ...rest } = o;
 		this.sc.groupAction('maketoken', { group: this.sc.group, ...rest, ...(username ? { username } : {}) });
 	}
 
-	editInvite(token: string, expires: number) {
+	editInvite(token: string, expires: number | string) {
 		this.sc.groupAction('edittoken', { token, expires });
 	}
 
@@ -551,11 +567,19 @@ export class Meeting {
 	transfers = $state<{ f: TransferredFile; state: string; done: number }[]>([]);
 
 	#transfer(f: TransferredFile) {
+		// Any guest can offer files; more than two waiting offers from one sender are refused.
+		if (!f.up && this.transfers.filter(x => x.state === 'offered' && x.f.userid === f.userid).length >= 2) {
+			f.cancel();
+			return;
+		}
 		const entry = { f, state: f.up ? 'inviting' : 'offered', done: 0 };
 		this.transfers.push(entry);
 		const update = (state: string) => {
 			const i = this.transfers.findIndex(x => x.f === f);
-			if (i >= 0) this.transfers[i] = { f, state, done: f.datalen };
+			if (i < 0) return;
+			// Galene sends 'closed' right after 'done' or 'cancelled'; keep the outcome on screen.
+			if (state === 'closed' && (this.transfers[i].state === 'done' || this.transfers[i].state === 'cancelled')) return;
+			this.transfers[i] = { f, state, done: f.datalen };
 		};
 		f.onevent = (state, data) => {
 			if (state === 'done' && !f.up) {
@@ -566,9 +590,10 @@ export class Meeting {
 				setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 			}
 			if (state === 'cancelled' && data) this.notice = `${f.name}: ${data}`;
+			const before = this.transfers.find(x => x.f === f)?.state;
 			update(state);
-			if (state === 'done' || state === 'cancelled' || state === 'closed')
-				setTimeout(() => (this.transfers = this.transfers.filter(x => x.f !== f)), 5000);
+			const over = (s?: string) => s === 'done' || s === 'cancelled' || s === 'closed';
+			if (over(state) && !over(before)) setTimeout(() => (this.transfers = this.transfers.filter(x => x.f !== f)), 5000);
 		};
 		if (!f.up) play('chat');
 	}
@@ -588,8 +613,18 @@ export class Meeting {
 		video.playsInline = true;
 		const capture = (video as any).captureStream?.bind(video) ?? (video as any).mozCaptureStream?.bind(video);
 		if (!capture) return this.#fail(new Error(t('why.file')));
-		await video.play().catch(this.#fail);
+		try {
+			await video.play();
+		} catch (e) {
+			URL.revokeObjectURL(video.src);
+			return this.#fail(e);
+		}
 		const stream: MediaStream = capture();
+		if (!stream.getTracks().length) {
+			video.pause();
+			URL.revokeObjectURL(video.src);
+			return this.#fail(new Error(t('why.file')));
+		}
 		if (this.mic) {
 			await this.toggleMic();
 			this.notice = t('notice.mutedForFile');
@@ -639,9 +674,14 @@ export class Meeting {
 		}
 	}
 
+	// Like Galene's findUserId: id or account name first. Display names are free text, so they
+	// count only when exactly one person uses that name.
 	find(name: string) {
-		const n = name.toLowerCase();
-		return this.people.find(p => p.name.toLowerCase() === n || p.account.toLowerCase() === n)?.id ?? null;
+		const p = this.people.find(x => x.id === name) ?? this.people.find(x => x.account === name);
+		if (p) return p.id;
+		const named = this.people.filter(x => x.name === name);
+		if (named.length > 1) throw new Error(t('cmd.ambiguous', { name, accounts: named.map(x => x.account).join(', ') }));
+		return named[0]?.id ?? null;
 	}
 
 	get left() {
@@ -649,6 +689,7 @@ export class Meeting {
 	}
 
 	leave() {
+		this.#settled = false;
 		this.#left = true;
 		this.error = '';
 		this.sc.close();
@@ -889,9 +930,14 @@ export class Meeting {
 	// Push to talk: opens a muted mic while held. Needs an audio track, i.e. the mic was on once.
 	talk(on: boolean) {
 		const a = this.#up('camera')?.stream?.getAudioTracks().find(tr => tr.readyState === 'live');
+		if (!on) {
+			if (this.ptt && a && !this.mic) a.enabled = false;
+			this.ptt = false;
+			return false;
+		}
 		if (!a || this.mic) return false;
-		a.enabled = on;
-		this.ptt = on;
+		a.enabled = true;
+		this.ptt = true;
 		return true;
 	}
 
@@ -919,6 +965,7 @@ export class Meeting {
 	};
 
 	toggleMic() {
+		this.ptt = false;
 		return this.#serial(async () => {
 			const a = this.#up('camera')?.stream?.getAudioTracks().find(t => t.readyState === 'live');
 			this.mic = !this.mic;

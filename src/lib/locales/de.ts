@@ -248,4 +248,8 @@ export default {
 	'tile.volume': 'Lautstärke',
 	'why.file': 'Dieser Browser kann keine Dateien in die Besprechung abspielen.',
 	'bg.failed': 'Das Bild konnte nicht gelesen werden. Verwende ein JPG-, PNG- oder WebP-Bild.',
+	'chat.unverified': '(nicht bestätigt)',
+	'cmd.ambiguous': '{name}: Mehrere Personen verwenden diesen Namen. Verwende einen Kontonamen: {accounts}',
+	'invite.expired': 'abgelaufen',
+	'invite.reopen': 'Wieder öffnen (1 Tag)',
 } satisfies Record<keyof typeof ko, string>;

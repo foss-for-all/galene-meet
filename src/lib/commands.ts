@@ -62,7 +62,7 @@ const SETTINGS: Record<string, keyof Advanced> = {
 
 const COMMANDS: Record<string, Command> = {
 	help: { help: 'cmd.help', run: m => help(m) },
-	me: { help: 'cmd.me', args: '<text>', run: (m, r) => m.send('/me ' + r) },
+	me: { help: 'cmd.me', args: '<text>', run: (m, r) => m.send('/me ' + r, m.dm) },
 	msg: {
 		help: 'cmd.msg',
 		args: '<user> <message>',

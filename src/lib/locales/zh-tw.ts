@@ -248,4 +248,8 @@ export default {
 	'tile.volume': '音量',
 	'why.file': '此瀏覽器無法在會議中播放檔案。',
 	'bg.failed': '無法讀取圖片。請使用 JPG、PNG 或 WebP 圖片。',
+	'chat.unverified': '(未驗證)',
+	'cmd.ambiguous': '{name}：有多人使用此名稱。請改用帳號名稱：{accounts}',
+	'invite.expired': '已過期',
+	'invite.reopen': '重新開啟（1 天）',
 } satisfies Record<keyof typeof ko, string>;

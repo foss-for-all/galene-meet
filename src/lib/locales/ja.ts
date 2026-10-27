@@ -248,4 +248,8 @@ export default {
 	'tile.volume': '音量',
 	'why.file': 'このブラウザは会議へのファイル再生に対応していません。',
 	'bg.failed': '画像を読み込めませんでした。JPG、PNG、WebP の画像を使用してください。',
+	'chat.unverified': '(未確認)',
+	'cmd.ambiguous': '{name}: この名前の参加者が複数います。アカウント名で指定してください: {accounts}',
+	'invite.expired': '期限切れ',
+	'invite.reopen': '再開 (1日)',
 } satisfies Record<keyof typeof ko, string>;

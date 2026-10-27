@@ -27,6 +27,7 @@
 	} = $props();
 
 	let showVolume = $state(false);
+	let open = $state(false);
 	let info = $state<Awaited<ReturnType<NonNullable<typeof stats>>>>(null);
 	let showInfo = $state(false);
 
@@ -69,12 +70,15 @@
 	{#if !video}
 		<div class="avatar">{tile.name.slice(0, 1).toUpperCase()}</div>
 	{/if}
-	<div class="actions" class:on={pinned}>
+	<button class="toggle" aria-expanded={open} title={t('tb.more')} aria-label={t('tb.more')} onclick={() => (open = !open)}>
+		<Icon name="ellipsis" />
+	</button>
+	<div class="actions" class:on={pinned} class:open>
 		{#if onhide}
 			<button title={t('tile.hideSelf')} aria-label={t('tile.hideSelf')} onclick={onhide}><Icon name="eye-off" /></button>
 		{/if}
 		{#if pip && video && !tile.local}
-			<button title={t('tile.pip')} aria-label={t('tile.pip')} onclick={() => el.requestPictureInPicture().catch(() => {})}>
+			<button class="minor" title={t('tile.pip')} aria-label={t('tile.pip')} onclick={() => el.requestPictureInPicture().catch(() => {})}>
 				<Icon name="picture-in-picture-2" />
 			</button>
 		{/if}
@@ -84,11 +88,11 @@
 			</button>
 		{/if}
 		{#if stats}
-			<button aria-pressed={showInfo} title={t('tile.stats')} aria-label={t('tile.stats')} onclick={() => (showInfo = !showInfo)}>
+			<button class="minor" aria-pressed={showInfo} title={t('tile.stats')} aria-label={t('tile.stats')} onclick={() => (showInfo = !showInfo)}>
 				<Icon name="info" />
 			</button>
 		{/if}
-		<button title={t('tile.fullscreen')} aria-label={t('tile.fullscreen')} onclick={full}><Icon name="maximize" /></button>
+		<button class="minor" title={t('tile.fullscreen')} aria-label={t('tile.fullscreen')} onclick={full}><Icon name="maximize" /></button>
 		<button class:pinned title={t(pinned ? 'tile.unpin' : 'tile.pin')} aria-label={t(pinned ? 'tile.unpin' : 'tile.pin')} onclick={onpin}>
 			<Icon name={pinned ? 'pin-off' : 'pin'} />
 		</button>
@@ -121,6 +125,7 @@
 
 <style>
 	figure {
+		container-type: size;
 		position: relative;
 		margin: 0;
 		width: 100%;
@@ -245,9 +250,40 @@
 	.actions.on {
 		opacity: 1;
 	}
+	.toggle {
+		display: none;
+	}
+	/* Touch screens have no hover: one button opens the row, and the row may wrap. */
 	@media (hover: none) {
+		.toggle {
+			position: absolute;
+			top: .5rem;
+			right: .5rem;
+			display: grid;
+			place-items: center;
+			width: 2.25rem;
+			height: 2.25rem;
+			padding: 0;
+			border: none;
+			border-radius: 50%;
+			background: rgb(0 0 0 / .55);
+			color: #fff;
+		}
 		.actions {
+			display: none;
+			top: 3rem;
+			left: .5rem;
+			flex-wrap: wrap;
+			justify-content: flex-end;
+		}
+		.actions.open {
+			display: flex;
 			opacity: 1;
+		}
+	}
+	@container (max-width: 14rem) {
+		.actions .minor {
+			display: none;
 		}
 	}
 	:global(figure:fullscreen) {

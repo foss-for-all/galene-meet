@@ -248,4 +248,8 @@ export default {
 	'tile.volume': 'Volume',
 	'why.file': 'This browser cannot play files to the meeting.',
 	'bg.failed': 'Could not read the image. Use a JPG, PNG or WebP picture.',
+	'chat.unverified': '(unverified)',
+	'cmd.ambiguous': '{name}: several people use this name. Use an account name: {accounts}',
+	'invite.expired': 'expired',
+	'invite.reopen': 'Reopen (1 day)',
 } satisfies Record<keyof typeof ko, string>;

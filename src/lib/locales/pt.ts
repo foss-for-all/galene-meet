@@ -248,4 +248,8 @@ export default {
 	'tile.volume': 'Volume',
 	'why.file': 'Este navegador não consegue reproduzir arquivos na reunião.',
 	'bg.failed': 'Não foi possível ler a imagem. Use uma foto JPG, PNG ou WebP.',
+	'chat.unverified': '(não verificado)',
+	'cmd.ambiguous': '{name}: várias pessoas usam este nome. Use um nome de conta: {accounts}',
+	'invite.expired': 'expirado',
+	'invite.reopen': 'Reabrir (1 dia)',
 } satisfies Record<keyof typeof ko, string>;

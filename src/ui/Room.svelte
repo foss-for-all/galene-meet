@@ -90,6 +90,9 @@
 	function keydown(e: KeyboardEvent) {
 		if (typing(e)) return;
 		if (e.code === 'Space') {
+			// A control focused from the keyboard keeps Space; one merely clicked does not.
+			const el = e.target as HTMLElement;
+			if (el.matches?.(':focus-visible') && el.closest('button, summary, a, [role="button"]')) return;
 			e.preventDefault();
 			if (!e.repeat && present) meeting.talk(true);
 			return;
@@ -142,7 +145,7 @@
 	{#if meeting.notice}
 		<p class="notice" role="status">{meeting.notice}</p>
 	{/if}
-	<div class="stage">
+	<div class="stage" class:side={panel !== null}>
 		<Stage {meeting} {layout} />
 		<Reactions {meeting} />
 		{#if meeting.transfers.length}
@@ -410,6 +413,16 @@
 		list-style: none;
 		display: grid;
 		gap: .5rem;
+	}
+	.side .transfers {
+		right: 21rem;
+	}
+	@media (max-width: 40rem) {
+		.side .transfers {
+			right: 1rem;
+			top: 3.5rem;
+			bottom: auto;
+		}
 	}
 	.transfers li {
 		display: flex;

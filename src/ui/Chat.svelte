@@ -55,14 +55,16 @@
 						<button class="reply" onclick={() => (meeting.dm = m.source ?? '')}>{t('chat.private')}</button>
 					{/if}
 					<time datetime={m.time.toISOString()}>{fmt.format(m.time)}</time>
-					{#if op && m.source && !m.system}
+					{#if op && (m.source || m.id) && !m.system}
 						<details>
 							<summary title={t('people.manage')} aria-label={t('people.manage')}>...</summary>
 							<menu>
 								{#if m.id}
-									<li><button onclick={e => (close(e), meeting.deleteMessage(m.id, m.source!))}>{t('chat.delete')}</button></li>
+									<li><button onclick={e => (close(e), meeting.deleteMessage(m.id, m.source ?? ''))}>{t('chat.delete')}</button></li>
 								{/if}
-								<li><button onclick={e => (close(e), meeting.deleteMessage(undefined, m.source!))}>{t('chat.deleteAll', { name: m.name })}</button></li>
+								{#if m.source}
+									<li><button onclick={e => (close(e), meeting.deleteMessage(undefined, m.source!))}>{t('chat.deleteAll', { name: m.name })}</button></li>
+								{/if}
 							</menu>
 						</details>
 					{/if}

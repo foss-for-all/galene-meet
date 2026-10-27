@@ -89,11 +89,19 @@
 			{#if canList && meeting.tokens.length}
 				<ul class="tokens">
 					{#each meeting.tokens as tk (tk.token)}
-						<li>
-							<span>{tk.username || t('invite.anyone')} · {tk.expires ? new Date(tk.expires).toLocaleString() : '-'}</span>
-							<button title={t('wait.copy')} aria-label={t('wait.copy')} onclick={() => navigator.clipboard.writeText(meeting.link(tk.token))}><Icon name="copy" /></button>
-							<button onclick={() => (meeting.editInvite(tk.token, 864e5), setTimeout(() => meeting.listInvites(), 500))}>{t('invite.extend')}</button>
-							<button class="kick" onclick={() => (meeting.editInvite(tk.token, -1000), setTimeout(() => meeting.listInvites(), 500))}>{t('invite.revoke')}</button>
+						{@const end = tk.expires ? Date.parse(tk.expires) : 0}
+						{@const dead = !!end && end <= Date.now()}
+						<li class:dead>
+							<span>{tk.username || t('invite.anyone')} · {dead ? t('invite.expired') : end ? new Date(end).toLocaleString() : '-'}</span>
+							{#if !dead}
+								<button title={t('wait.copy')} aria-label={t('wait.copy')} onclick={() => navigator.clipboard.writeText(meeting.link(tk.token))}><Icon name="copy" /></button>
+							{/if}
+							<button onclick={() => meeting.editInvite(tk.token, new Date(Math.max(end, Date.now()) + 864e5).toISOString())}>
+								{t(dead ? 'invite.reopen' : 'invite.extend')}
+							</button>
+							{#if !dead}
+								<button class="kick" onclick={() => meeting.editInvite(tk.token, -1000)}>{t('invite.revoke')}</button>
+							{/if}
 						</li>
 					{/each}
 				</ul>
@@ -251,6 +259,10 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.tokens .dead span {
+		color: #9aa0ad;
+		text-decoration: line-through;
 	}
 	.warnrow {
 		display: flex;

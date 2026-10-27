@@ -29,8 +29,14 @@ export function setSound(s: Sound, on: boolean) {
 	localStorage.setItem('meet-sounds', JSON.stringify(sounds));
 }
 
+const last: Partial<Record<Sound, number>> = {};
+
 export function play(s: Sound) {
 	if (!sounds[s]) return;
+	// Many events at once (a crowd leaving, a flood of offers) play one sound.
+	const at = performance.now();
+	if (at - (last[s] ?? -1e9) < 300) return;
+	last[s] = at;
 	const c = context();
 	const now = c.currentTime;
 	for (const [f, at, len] of TONES[s]) {

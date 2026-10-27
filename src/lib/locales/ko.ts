@@ -246,4 +246,8 @@ export default {
 	'tile.volume': '볼륨',
 	'why.file': '이 브라우저는 파일 재생 송출을 지원하지 않습니다.',
 	'bg.failed': '이미지를 읽지 못했습니다. JPG, PNG, WebP 사진을 쓰세요.',
+	'chat.unverified': '(확인 안 됨)',
+	'cmd.ambiguous': '{name}: 이 이름을 쓰는 사람이 여럿입니다. 계정 이름으로 지정하세요: {accounts}',
+	'invite.expired': '만료됨',
+	'invite.reopen': '다시 열기 (1일)',
 };

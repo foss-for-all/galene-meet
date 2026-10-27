@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { callback, canHost, loggedIn, login, logout, token } from './lib/auth';
 	import { autoplay } from './lib/autoplay.svelte';
 	import { GROUP, ROOM } from './lib/config';
@@ -9,6 +10,8 @@
 	import Waiting from './ui/Waiting.svelte';
 
 	const RETRY = { wait: 5000, reconnect: 2000 };
+	// Survives a reload of this tab only, so a refresh puts the user back into the meeting.
+	const LIVE = 'meet-live';
 
 	// Any path becomes a valid room name, so links like /Weekly_Sync still work.
 	function normalize(path: string) {
@@ -35,6 +38,16 @@
 	let gen = 0;
 	const busy = $derived(!!meeting && !meeting.joined);
 
+	const live = (() => {
+		try {
+			return JSON.parse(sessionStorage.getItem(LIVE) ?? 'null') as { room: string; name: string; media: typeof media } | null;
+		} catch {
+			return null;
+		}
+	})();
+	if (live && live.room === untrack(() => room) && !params.has('code') && !params.has('error'))
+		queueMicrotask(() => join(live.name, live.media));
+
 	if (params.has('code') || params.has('error')) {
 		history.replaceState(null, '', '/');
 		callback(params)
@@ -59,10 +72,18 @@
 		if (!meeting?.joined) return;
 		retry = null;
 		meeting.start(media);
+		const m = meeting;
+		const save = () => {
+			if (!m.closed) sessionStorage.setItem(LIVE, JSON.stringify({ room, name, media: m.want }));
+		};
+		save();
+		addEventListener('pagehide', save);
+		return () => removeEventListener('pagehide', save);
 	});
 
 	$effect(() => {
 		if (!meeting?.closed) return;
+		if (meeting.left || (meeting.rejected && !meeting.waiting)) sessionStorage.removeItem(LIVE);
 		if (meeting.joined) media = meeting.want;
 		if (meeting.waiting && !member) {
 			ended ||= meeting.joined;
@@ -84,7 +105,8 @@
 	$effect(() => {
 		if (!retry) return;
 		attempt;
-		const id = setTimeout(() => join(name), RETRY[retry]);
+		// Someone dropped out of a running meeting: the host is likely back in a moment.
+		const id = setTimeout(() => join(name), retry === 'wait' && ended ? 2000 : RETRY[retry]);
 		return () => clearTimeout(id);
 	});
 
@@ -132,6 +154,7 @@
 	}
 
 	function cancel() {
+		sessionStorage.removeItem(LIVE);
 		gen++;
 		retry = null;
 		ended = false;

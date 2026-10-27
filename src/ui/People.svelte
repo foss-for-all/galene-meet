@@ -18,6 +18,15 @@
 
 <aside>
 	<h2>{t('people.title', { n: meeting.people.length })}</h2>
+	{#if op}
+		<div class="tools">
+			<button onclick={() => meeting.muteAll()}><Icon name="volume-x" />{t('people.muteAll')}</button>
+			<button onclick={() => meeting.lowerHands()}><Icon name="hand" />{t('people.lowerHands')}</button>
+			<button aria-pressed={meeting.locked} onclick={() => meeting.lock()}>
+				<Icon name={meeting.locked ? 'lock' : 'lock-open'} />{t(meeting.locked ? 'people.unlock' : 'people.lock')}
+			</button>
+		</div>
+	{/if}
 	<ul>
 		{#each sorted as p (p.id)}
 			<li>
@@ -59,6 +68,30 @@
 		border-left: 1px solid #2a2e37;
 		background: #181a20;
 		overflow-y: auto;
+	}
+	.tools {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .375rem;
+		padding: 0 .75rem .75rem;
+	}
+	.tools button {
+		display: flex;
+		align-items: center;
+		gap: .375rem;
+		height: 2rem;
+		padding: 0 .625rem;
+		border: 1px solid #3a3f4b;
+		border-radius: 1rem;
+		font-size: .8125rem;
+	}
+	.tools button[aria-pressed='true'] {
+		border-color: #fbbc04;
+		color: #ffe08a;
+	}
+	.tools :global(svg) {
+		width: 1rem;
+		height: 1rem;
 	}
 	h2 {
 		margin: 0;

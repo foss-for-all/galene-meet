@@ -1,5 +1,6 @@
 import { analyse, type Level } from './audio';
 import { get as image } from './images';
+import { play } from './sounds.svelte';
 import { t, type Key } from './i18n.svelte';
 import { ServerConnection, type Credentials, type Stream } from '../../vendor/galene/protocol.js';
 
@@ -112,6 +113,18 @@ export class Meeting {
 	reactions = $state<{ id: number; name: string; icon: Reaction }[]>([]);
 	#reacted = 0;
 	speaking = $state<string[]>([]);
+	locked = $state(false);
+	ptt = $state(false);
+	joinedAt = $state(0);
+	hideSelf = $state(localStorage.getItem('meet-hide-self') === '1');
+	#settled = false;
+	#known = new Map<string, boolean>();
+	#hands = new Set<string>();
+	#level = new Map<string, number>();
+	#cand = '';
+	#candSince = 0;
+	#mutedTalk = 0;
+	#warned = 0;
 	speaker = $state<string | null>(null);
 	#v = $state(0);
 	#last = new Map<string, number>();
@@ -169,10 +182,16 @@ export class Meeting {
 		const bump = () => this.#v++;
 
 		sc.onconnected = () => sc.join(group, username, creds, name ? { name } : undefined);
-		sc.onjoined = (kind, _group, perms, _status, _data, _error, message) => {
+		sc.onjoined = (kind, _group, perms, status, _data, _error, message) => {
 			switch (kind) {
 			case 'join':
 			case 'change':
+				if (!this.joined) {
+					this.joinedAt = Date.now();
+					// The user list arrives right after joining; sounds start once it has.
+					setTimeout(() => (this.#settled = true), 2000);
+				}
+				this.locked = !!status?.locked;
 				this.joined = true;
 				this.perms = perms;
 				if (!perms.includes('present')) {
@@ -197,13 +216,17 @@ export class Meeting {
 			}
 			bump();
 		};
-		sc.onuser = bump;
+		sc.onuser = (id, kind) => {
+			this.#notify(id, kind);
+			bump();
+		};
 		sc.ondownstream = s => {
 			s.ondowntrack = bump;
 			s.onclose = bump;
 			s.setStatsInterval(300);
 		};
-		sc.onchat = (id, source, dest, username, time, _privileged, _history, kind, message) => {
+		sc.onchat = (id, source, dest, username, time, _privileged, history, kind, message) => {
+			if (!history && source !== sc.id && this.#settled) play('chat');
 			this.messages.push({
 				key: id ?? crypto.randomUUID(),
 				name: this.#display(source, username),
@@ -216,7 +239,8 @@ export class Meeting {
 		};
 		sc.onusermessage = (source, _dest, username, _time, privileged, kind, _error, message) => {
 			if (kind === 'reaction') {
-				if (REACTIONS.includes(message as Reaction)) this.#show(this.#display(source, username), message as Reaction);
+				if (REACTIONS.includes(message as Reaction))
+					this.#show(this.#display(source, username), message as Reaction, source === sc.id);
 				return;
 			}
 			// Any guest may send these kinds; only the server and operators are believed.
@@ -240,6 +264,9 @@ export class Meeting {
 				this.want.mic = false;
 				this.notice = t('notice.muted');
 				break;
+			case 'lowerhand':
+				if (this.hand) this.raiseHand();
+				break;
 			case 'clearchat':
 				this.messages = [];
 				break;
@@ -258,18 +285,63 @@ export class Meeting {
 		this.#timer = setInterval(() => this.#detect(), 300);
 	}
 
+	#notify(id: string, kind: string) {
+		const u = this.sc.users[id];
+		if (kind === 'add' && u) this.#known.set(id, u.permissions.includes('system'));
+		const self = id === this.sc.id;
+		if (kind === 'delete') {
+			if (this.#settled && !self && this.#known.get(id) === false) play('leave');
+			this.#known.delete(id);
+			this.#hands.delete(id);
+			return;
+		}
+		if (kind === 'add' && this.#settled && !self && !u?.permissions.includes('system')) play('join');
+		const hand = !!u?.data?.raisehand;
+		if (hand && !this.#hands.has(id) && !self && this.#settled) play('hand');
+		if (hand) this.#hands.add(id);
+		else this.#hands.delete(id);
+	}
+
 	#heard(user: string) {
 		this.#last.set(user, Date.now());
-		if (user !== this.sc.id) this.speaker = user;
+	}
+
+	// The big tile follows whoever has talked for a moment, not every cough, and waits for a pause.
+	#pick(now: number) {
+		let best = '';
+		let top = 0.04;
+		for (const [u, e] of this.#level) if (e > top && u !== this.sc.id) [best, top] = [u, e];
+		if (!best || best === this.speaker) {
+			this.#cand = '';
+			return;
+		}
+		if (this.#cand !== best) {
+			this.#cand = best;
+			this.#candSince = now;
+			return;
+		}
+		const quiet = !this.speaker || now - (this.#last.get(this.speaker) ?? 0) > 1000;
+		if (now - this.#candSince > 800 && quiet) this.speaker = best;
 	}
 
 	#detect() {
-		for (const s of Object.values(this.sc.down)) {
-			const loud = Object.values(s.stats).some(t => t['inbound-rtp']?.audioEnergy > 0.04);
-			if (loud && s.source) this.#heard(s.source);
-		}
-		if (this.level() > 0.03) this.#heard(this.sc.id);
 		const now = Date.now();
+		for (const s of Object.values(this.sc.down)) {
+			if (!s.source) continue;
+			let e = 0;
+			for (const t of Object.values(s.stats)) e = Math.max(e, t['inbound-rtp']?.audioEnergy ?? 0);
+			this.#level.set(s.source, (this.#level.get(s.source) ?? 0) * 0.5 + e * 0.5);
+			if (e > 0.04) this.#heard(s.source);
+		}
+		for (const u of this.#level.keys()) if (!this.sc.users[u]) this.#level.delete(u);
+		this.#pick(now);
+		const raw = this.#mon?.read() ?? 0;
+		if ((this.mic || this.ptt) && raw > 0.03) this.#heard(this.sc.id);
+		this.#mutedTalk = !this.mic && !this.ptt && raw > 0.05 ? this.#mutedTalk + 1 : 0;
+		if (this.#mutedTalk >= 5 && now - this.#warned > 30_000) {
+			this.#warned = now;
+			this.notice = t('notice.mutedTalk');
+		}
 		const list = [...this.#last].filter(([, t]) => now - t < 700).map(([u]) => u).sort();
 		if (list.join() !== this.speaking.join()) this.speaking = list;
 	}
@@ -315,7 +387,8 @@ export class Meeting {
 		this.sc.userMessage('reaction', '', icon);
 	}
 
-	#show(name: string, icon: Reaction) {
+	#show(name: string, icon: Reaction, mine = false) {
+		if (!mine) play('reaction');
 		const r = { id: Math.random(), name, icon };
 		this.reactions = [...this.reactions.slice(-19), r];
 		setTimeout(() => (this.reactions = this.reactions.filter(x => x !== r)), 4000);
@@ -384,7 +457,11 @@ export class Meeting {
 		c.onclose = replace => {
 			media.getTracks().forEach(t => t.stop());
 			stop?.();
-			if (!replace && label === 'camera') this.mic = this.cam = false;
+			if (!replace && label === 'camera') {
+				this.mic = this.cam = false;
+				this.#mon?.stop();
+				this.#mon = null;
+			}
 			if (!replace && label === 'screenshare') this.screen = false;
 			this.#v++;
 		};
@@ -520,14 +597,53 @@ export class Meeting {
 		});
 	}
 
+	// Reads a copy of the mic that stays enabled, so talking while muted is noticed.
 	#meter(media: MediaStream) {
 		this.#mon?.stop();
+		this.#mon = null;
 		const track = media.getAudioTracks()[0];
-		this.#mon = track ? analyse(track) : null;
+		if (!track) return;
+		const copy = track.clone();
+		copy.enabled = true;
+		const l = analyse(copy);
+		this.#mon = {
+			read: l.read,
+			stop: () => {
+				l.stop();
+				copy.stop();
+			},
+		};
 	}
 
 	level() {
-		return this.mic && this.#mon ? this.#mon.read() : 0;
+		return (this.mic || this.ptt) && this.#mon ? this.#mon.read() : 0;
+	}
+
+	// Push to talk: opens a muted mic while held. Needs an audio track, i.e. the mic was on once.
+	talk(on: boolean) {
+		const a = this.#up('camera')?.stream?.getAudioTracks().find(tr => tr.readyState === 'live');
+		if (!a || this.mic) return false;
+		a.enabled = on;
+		this.ptt = on;
+		return true;
+	}
+
+	setHideSelf(v: boolean) {
+		this.hideSelf = v;
+		if (v) this.notice = t('notice.selfHidden');
+		localStorage.setItem('meet-hide-self', v ? '1' : '');
+	}
+
+	muteAll() {
+		for (const p of this.people) if (!p.self) this.sc.userMessage('mute', p.id);
+	}
+
+	lowerHands() {
+		this.sc.userMessage('lowerhand', '');
+	}
+
+	lock() {
+		this.sc.groupAction(this.locked ? 'unlock' : 'lock');
 	}
 
 	#fail = (e: unknown) => {

@@ -53,6 +53,54 @@
 		return () => clearTimeout(id);
 	});
 
+	let now = $state(Date.now());
+	$effect(() => {
+		const id = setInterval(() => (now = Date.now()), 1000);
+		return () => clearInterval(id);
+	});
+	const elapsed = $derived.by(() => {
+		const sec = Math.max(0, Math.floor((now - meeting.joinedAt) / 1000));
+		const h = Math.floor(sec / 3600);
+		const mm = String(Math.floor((sec % 3600) / 60)).padStart(h ? 2 : 1, '0');
+		const ss = String(sec % 60).padStart(2, '0');
+		return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+	});
+
+	async function copyLink() {
+		const room = (meeting.sc.group ?? '').replace(/^meet\//, '');
+		await navigator.clipboard.writeText(`${location.origin}/${room}`).catch(() => {});
+		meeting.notice = t('notice.copied');
+	}
+
+	// Single-key shortcuts like Meet's, ignored while typing or in a dialog.
+	function typing(e: KeyboardEvent) {
+		const el = e.target as HTMLElement;
+		return e.ctrlKey || e.metaKey || e.altKey || settings || !!el.closest('input, textarea, select, [contenteditable], dialog');
+	}
+
+	function keydown(e: KeyboardEvent) {
+		if (typing(e)) return;
+		if (e.code === 'Space') {
+			e.preventDefault();
+			if (!e.repeat && present) meeting.talk(true);
+			return;
+		}
+		if (e.repeat) return;
+		const k = e.key.toLowerCase();
+		if (k === 'm') run(noPresent, () => meeting.toggleMic());
+		else if (k === 'v') run(noPresent, () => meeting.toggleCam());
+		else if (k === 'h') meeting.raiseHand();
+		else if (k === 'c') toggle('chat');
+		else if (k === 'p') toggle('people');
+	}
+
+	function keyup(e: KeyboardEvent) {
+		if (e.code === 'Space' && meeting.ptt) {
+			e.preventDefault();
+			meeting.talk(false);
+		}
+	}
+
 	$effect(() => {
 		if (!warning) return;
 		const id = setTimeout(() => (warning = ''), 4000);
@@ -60,14 +108,25 @@
 	});
 </script>
 
+<svelte:window onkeydown={keydown} onkeyup={keyup} onblur={() => meeting.ptt && meeting.talk(false)} />
+
 {#if settings}
 	<Settings {meeting} onclose={closeSettings} />
 {/if}
 
 <div class="room">
-	{#if meeting.recording}
-		<p class="rec" role="status"><Icon name="circle-dot" />{t('room.recording')}</p>
-	{/if}
+	<div class="status">
+		<span class="clock">{elapsed}</span>
+		{#if meeting.recording}
+			<span class="rec" role="status"><Icon name="circle-dot" />{t('room.recording')}</span>
+		{/if}
+		{#if meeting.locked}
+			<span role="status"><Icon name="lock" />{t('room.locked')}</span>
+		{/if}
+		{#if meeting.ptt}
+			<span class="ptt" role="status"><Icon name="mic" />{t('room.ptt')}</span>
+		{/if}
+	</div>
 	{#if autoplay.blocked}
 		<button class="unmute primary" onclick={resume}>{t('room.unmute')}</button>
 	{/if}
@@ -145,6 +204,9 @@
 				onclick={() => run(null, () => meeting.raiseHand())}
 			>
 				<Icon name="hand" />
+			</button>
+			<button title={t('tb.copyLink')} onclick={() => run(null, copyLink)}>
+				<Icon name="link" />
 			</button>
 			<button bind:this={settingsButton} title={t('tb.settings')} onclick={() => run(null, () => (settings = true))}>
 				<Icon name="settings" />
@@ -319,8 +381,7 @@
 		translate: -50% 0;
 		z-index: 2;
 	}
-	.notice,
-	.rec {
+	.notice {
 		position: absolute;
 		top: 1rem;
 		z-index: 1;
@@ -333,12 +394,33 @@
 		left: 50%;
 		transform: translateX(-50%);
 	}
-	.rec {
+	.status {
+		position: absolute;
+		top: 1rem;
 		left: 1rem;
+		z-index: 1;
+		display: flex;
+		gap: .375rem;
+		pointer-events: none;
+	}
+	.status span {
 		display: flex;
 		gap: .375rem;
 		align-items: center;
+		padding: .25rem .625rem;
+		border-radius: .5rem;
+		background: rgb(45 49 59 / .85);
+		font-size: .8125rem;
+		font-variant-numeric: tabular-nums;
+	}
+	.status .rec {
 		color: #ff8a80;
-		font-size: .875rem;
+	}
+	.status .ptt {
+		color: #34c759;
+	}
+	.status :global(svg) {
+		width: 1rem;
+		height: 1rem;
 	}
 </style>

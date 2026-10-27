@@ -10,13 +10,23 @@
 		pinned = false,
 		fit = false,
 		onpin,
-	}: { tile: Tile; speaking?: boolean; pinned?: boolean; fit?: boolean; onpin: () => void } = $props();
+		onhide,
+	}: { tile: Tile; speaking?: boolean; pinned?: boolean; fit?: boolean; onpin: () => void; onhide?: () => void } = $props();
 
 	const video = $derived(!!tile.stream?.getVideoTracks().length);
+	const pip = typeof document !== 'undefined' && document.pictureInPictureEnabled;
+	let figure: HTMLElement;
+	let el: HTMLVideoElement;
+
+	function full() {
+		if (document.fullscreenElement) document.exitFullscreen();
+		else figure.requestFullscreen?.().catch(() => {});
+	}
 </script>
 
-<figure class:share={tile.label !== 'camera'} class:mirror={tile.mirror} class:fit class:speaking>
+<figure bind:this={figure} class:share={tile.label !== 'camera'} class:mirror={tile.mirror} class:fit class:speaking>
 	<video
+		bind:this={el}
 		autoplay
 		playsinline
 		muted={tile.local}
@@ -33,9 +43,20 @@
 	{#if !video}
 		<div class="avatar">{tile.name.slice(0, 1).toUpperCase()}</div>
 	{/if}
-	<button class="pin" class:on={pinned} title={t(pinned ? 'tile.unpin' : 'tile.pin')} onclick={onpin}>
-		<Icon name={pinned ? 'pin-off' : 'pin'} />
-	</button>
+	<div class="actions" class:on={pinned}>
+		{#if onhide}
+			<button title={t('tile.hideSelf')} aria-label={t('tile.hideSelf')} onclick={onhide}><Icon name="eye-off" /></button>
+		{/if}
+		{#if pip && video && !tile.local}
+			<button title={t('tile.pip')} aria-label={t('tile.pip')} onclick={() => el.requestPictureInPicture().catch(() => {})}>
+				<Icon name="picture-in-picture-2" />
+			</button>
+		{/if}
+		<button title={t('tile.fullscreen')} aria-label={t('tile.fullscreen')} onclick={full}><Icon name="maximize" /></button>
+		<button class:pinned title={t(pinned ? 'tile.unpin' : 'tile.pin')} aria-label={t(pinned ? 'tile.unpin' : 'tile.pin')} onclick={onpin}>
+			<Icon name={pinned ? 'pin-off' : 'pin'} />
+		</button>
+	</div>
 	<figcaption>
 		{#if tile.hand}<span class="hand"><Icon name="hand" /></span>{/if}
 		{tile.name}
@@ -111,10 +132,16 @@
 		display: flex;
 		color: #fbbc04;
 	}
-	.pin {
+	.actions {
 		position: absolute;
 		top: .5rem;
 		right: .5rem;
+		display: flex;
+		gap: .25rem;
+		opacity: 0;
+		transition: opacity .15s;
+	}
+	.actions button {
 		display: grid;
 		place-items: center;
 		width: 2.25rem;
@@ -124,17 +151,22 @@
 		border-radius: 50%;
 		background: rgb(0 0 0 / .55);
 		color: #fff;
-		opacity: 0;
-		transition: opacity .15s;
 	}
-	figure:hover .pin,
-	.pin:focus-visible,
-	.pin.on {
+	.actions .pinned {
+		background: #8fb9ff;
+		color: #111318;
+	}
+	figure:hover .actions,
+	.actions:focus-within,
+	.actions.on {
 		opacity: 1;
 	}
 	@media (hover: none) {
-		.pin {
+		.actions {
 			opacity: 1;
 		}
+	}
+	:global(figure:fullscreen) {
+		border-radius: 0;
 	}
 </style>

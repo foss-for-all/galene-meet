@@ -7,7 +7,9 @@
 
 	let pinned = $state<string | null>(null);
 
-	const tiles = $derived(meeting.tiles);
+	const tiles = $derived(
+		meeting.hideSelf && meeting.tiles.length > 1 ? meeting.tiles.filter(t => !(t.local && t.label === 'camera')) : meeting.tiles,
+	);
 	const main = $derived.by(() => {
 		const pin = tiles.find(t => t.key === pinned);
 		if (pin) return pin;
@@ -34,6 +36,7 @@
 		speaking={t.label === 'camera' && meeting.speaking.includes(t.user)}
 		pinned={pinned === t.key}
 		onpin={() => (pinned = pinned === t.key ? null : t.key)}
+		onhide={t.local && t.label === 'camera' ? () => meeting.setHideSelf(true) : undefined}
 	/>
 {/snippet}
 

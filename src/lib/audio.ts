@@ -1,6 +1,6 @@
 let ctx: AudioContext | null = null;
 
-function context() {
+export function context() {
 	ctx ??= new AudioContext();
 	if (ctx.state === 'suspended') ctx.resume().catch(() => {});
 	return ctx;

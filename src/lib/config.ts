@@ -1,4 +1,4 @@
-export const SSO = 'https://sso.fossforall.org/realms/fossforall/protocol/openid-connect';
+export const SSO: string = import.meta.env.VITE_SSO;
 export const CLIENT = 'galene';
 export const GROUP = 'meet/';
 // Becomes a Galene group path and a recordings folder: no '.', '/' or escaping.

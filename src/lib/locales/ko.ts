@@ -250,4 +250,5 @@ export default {
 	'cmd.ambiguous': '{name}: 이 이름을 쓰는 사람이 여럿입니다. 계정 이름으로 지정하세요: {accounts}',
 	'invite.expired': '만료됨',
 	'invite.reopen': '다시 열기 (1일)',
+	'notice.recResumed': '녹화가 새로고침으로 끊겨 다시 시작했습니다.',
 };

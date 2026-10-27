@@ -252,4 +252,5 @@ export default {
 	'cmd.ambiguous': '{name}: varias personas usan este nombre. Usa un nombre de cuenta: {accounts}',
 	'invite.expired': 'caducado',
 	'invite.reopen': 'Reabrir (1 día)',
+	'notice.recResumed': 'La recarga detuvo la grabación; se ha reanudado.',
 } satisfies Record<keyof typeof ko, string>;

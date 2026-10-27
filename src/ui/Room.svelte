@@ -113,6 +113,17 @@
 		}
 	}
 
+	// Asks before a reload or close: the last host leaving ends the meeting for everyone.
+	$effect(() => {
+		const ask = (e: BeforeUnloadEvent) => {
+			if (meeting.closed) return;
+			e.preventDefault();
+			e.returnValue = '';
+		};
+		addEventListener('beforeunload', ask);
+		return () => removeEventListener('beforeunload', ask);
+	});
+
 	$effect(() => {
 		if (!warning) return;
 		const id = setTimeout(() => (warning = ''), 4000);

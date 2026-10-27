@@ -45,8 +45,11 @@
 			return null;
 		}
 	})();
-	if (live && live.room === untrack(() => room) && !params.has('code') && !params.has('error'))
+	let resumeRecording = false;
+	if (live && live.room === untrack(() => room) && !params.has('code') && !params.has('error')) {
+		resumeRecording = !!(live as { recording?: boolean }).recording;
 		queueMicrotask(() => join(live.name, live.media));
+	}
 
 	if (params.has('code') || params.has('error')) {
 		history.replaceState(null, '', '/');
@@ -74,8 +77,18 @@
 		meeting.start(media);
 		const m = meeting;
 		const save = () => {
-			if (!m.closed) sessionStorage.setItem(LIVE, JSON.stringify({ room, name, media: m.want }));
+			if (!m.closed) sessionStorage.setItem(LIVE, JSON.stringify({ room, name, media: m.want, recording: m.recording }));
 		};
+		// Our own reload stopped the recording (autokick removes the recorder with the last host): start it again.
+		if (resumeRecording) {
+			resumeRecording = false;
+			setTimeout(() => {
+				if (m.joined && !m.closed && !m.recording && m.perms.includes('record')) {
+					m.record();
+					m.notice = t('notice.recResumed');
+				}
+			}, 2500);
+		}
 		save();
 		addEventListener('pagehide', save);
 		return () => removeEventListener('pagehide', save);

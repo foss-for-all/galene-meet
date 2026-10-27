@@ -252,4 +252,5 @@ export default {
 	'cmd.ambiguous': '{name}：有多人使用此名称。请改用账号名称：{accounts}',
 	'invite.expired': '已过期',
 	'invite.reopen': '重新开启（1 天）',
+	'notice.recResumed': '刷新中断了录制，已重新开始。',
 } satisfies Record<keyof typeof ko, string>;

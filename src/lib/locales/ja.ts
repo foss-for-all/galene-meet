@@ -252,4 +252,5 @@ export default {
 	'cmd.ambiguous': '{name}: この名前の参加者が複数います。アカウント名で指定してください: {accounts}',
 	'invite.expired': '期限切れ',
 	'invite.reopen': '再開 (1日)',
+	'notice.recResumed': '再読み込みで録画が止まったため、再開しました。',
 } satisfies Record<keyof typeof ko, string>;

@@ -37,6 +37,9 @@
 		pinned={pinned === t.key}
 		onpin={() => (pinned = pinned === t.key ? null : t.key)}
 		onhide={t.local && t.label === 'camera' ? () => meeting.setHideSelf(true) : undefined}
+		volume={meeting.volumes[t.user] ?? 1}
+		onvolume={v => (meeting.volumes[t.user] = v)}
+		stats={t.stream ? () => meeting.stats(t.key) : undefined}
 	/>
 {/snippet}
 

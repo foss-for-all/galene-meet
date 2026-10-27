@@ -7,9 +7,23 @@
 	const selects = [
 		{ key: 'send', options: ['lowest', 'low', 'normal', 'unlimited'] },
 		{ key: 'simulcast', options: ['auto', 'on', 'off'] },
-		{ key: 'receive', options: ['everything', 'low', 'screenshare', 'audio'] },
+		{ key: 'receive', options: ['everything', 'low', 'screenshare', 'audio', 'nothing'] },
+		{ key: 'filter', options: ['none', 'flip-h', 'flip-v', 'rotate'] },
 	] as const;
-	const checks = ['hqaudio', 'processing', 'blackboard', 'mirror'] as const;
+	const checks = ['hqaudio', 'processing', 'blackboard', 'mirror', 'forceRelay'] as const;
+
+	let relay = $state('');
+
+	async function test() {
+		relay = t('cmd.relayRunning');
+		const start = Date.now();
+		try {
+			const rtt = await meeting.relayTest();
+			relay = t('cmd.relayOk', { ms: Date.now() - start, rtt });
+		} catch (e) {
+			relay = t('cmd.relayFail', { error: String(e) });
+		}
+	}
 
 	const set = (o: Partial<Advanced>) => meeting.advance(o);
 </script>
@@ -33,6 +47,11 @@
 				{t(`adv.${c}`)}
 			</label>
 		{/each}
+		<div class="buttons">
+			<button type="button" onclick={() => meeting.renegotiate()}>{t('adv.renegotiate')}</button>
+			<button type="button" onclick={test}>{t('adv.relayTest')}</button>
+		</div>
+		{#if relay}<p class="result">{relay}</p>{/if}
 	</div>
 </details>
 
@@ -60,6 +79,22 @@
 	.check input {
 		width: 1.125rem;
 		height: 1.125rem;
+	}
+	.buttons {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .5rem;
+	}
+	.buttons button {
+		height: 2.25rem;
+		padding: 0 .75rem;
+		border-color: var(--line);
+		font-size: .875rem;
+	}
+	.result {
+		margin: 0;
+		font-size: .8125rem;
+		color: #9aa0ad;
 	}
 	select {
 		font: inherit;

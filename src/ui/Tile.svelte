@@ -11,7 +11,32 @@
 		fit = false,
 		onpin,
 		onhide,
-	}: { tile: Tile; speaking?: boolean; pinned?: boolean; fit?: boolean; onpin: () => void; onhide?: () => void } = $props();
+		volume = 1,
+		onvolume,
+		stats,
+	}: {
+		tile: Tile;
+		speaking?: boolean;
+		pinned?: boolean;
+		fit?: boolean;
+		onpin: () => void;
+		onhide?: () => void;
+		volume?: number;
+		onvolume?: (v: number) => void;
+		stats?: () => Promise<{ size: string; fps: number; kbps: number; lost: number; rtt: number } | null>;
+	} = $props();
+
+	let showVolume = $state(false);
+	let info = $state<Awaited<ReturnType<NonNullable<typeof stats>>>>(null);
+	let showInfo = $state(false);
+
+	$effect(() => {
+		if (!showInfo || !stats) return;
+		const get = () => stats().then(s => (info = s));
+		get();
+		const id = setInterval(get, 1000);
+		return () => clearInterval(id);
+	});
 
 	const video = $derived(!!tile.stream?.getVideoTracks().length);
 	const pip = typeof document !== 'undefined' && document.pictureInPictureEnabled;
@@ -34,6 +59,7 @@
 		{@attach el => {
 			// Assigning srcObject restarts loading, even with the same stream.
 			if (el.srcObject !== tile.stream) el.srcObject = tile.stream;
+			el.volume = volume;
 			if (tile.stream && !tile.local)
 				el.play().catch(e => {
 					if (e.name === 'NotAllowedError') autoplay.blocked = true;
@@ -52,11 +78,41 @@
 				<Icon name="picture-in-picture-2" />
 			</button>
 		{/if}
+		{#if onvolume && !tile.local}
+			<button aria-pressed={showVolume} title={t('tile.volume')} aria-label={t('tile.volume')} onclick={() => (showVolume = !showVolume)}>
+				<Icon name={volume === 0 ? 'volume-x' : 'volume-2'} />
+			</button>
+		{/if}
+		{#if stats}
+			<button aria-pressed={showInfo} title={t('tile.stats')} aria-label={t('tile.stats')} onclick={() => (showInfo = !showInfo)}>
+				<Icon name="info" />
+			</button>
+		{/if}
 		<button title={t('tile.fullscreen')} aria-label={t('tile.fullscreen')} onclick={full}><Icon name="maximize" /></button>
 		<button class:pinned title={t(pinned ? 'tile.unpin' : 'tile.pin')} aria-label={t(pinned ? 'tile.unpin' : 'tile.pin')} onclick={onpin}>
 			<Icon name={pinned ? 'pin-off' : 'pin'} />
 		</button>
 	</div>
+	{#if showVolume && onvolume}
+		<input
+			class="volume"
+			type="range"
+			min="0"
+			max="1"
+			step="0.05"
+			value={volume}
+			aria-label={t('tile.volume')}
+			oninput={e => onvolume(Number(e.currentTarget.value))}
+		/>
+	{/if}
+	{#if showInfo && info}
+		<dl class="info">
+			{#if info.size}<dt>{t('stats.size')}</dt><dd>{info.size} · {info.fps} fps</dd>{/if}
+			<dt>{t('stats.rate')}</dt><dd>{info.kbps} kbps</dd>
+			<dt>{t('stats.loss')}</dt><dd>{info.lost.toFixed(1)}%</dd>
+			{#if info.rtt}<dt>RTT</dt><dd>{info.rtt} ms</dd>{/if}
+		</dl>
+	{/if}
 	<figcaption>
 		{#if tile.hand}<span class="hand"><Icon name="hand" /></span>{/if}
 		{tile.name}
@@ -151,6 +207,34 @@
 		border-radius: 50%;
 		background: rgb(0 0 0 / .55);
 		color: #fff;
+	}
+	.actions [aria-pressed='true'] {
+		background: #8fb9ff;
+		color: #111318;
+	}
+	.volume {
+		position: absolute;
+		top: 3.25rem;
+		right: .75rem;
+		width: 8rem;
+	}
+	.info {
+		position: absolute;
+		top: 3.25rem;
+		left: .5rem;
+		display: grid;
+		grid-template-columns: auto auto;
+		gap: .125rem .5rem;
+		margin: 0;
+		padding: .375rem .5rem;
+		border-radius: .375rem;
+		background: rgb(0 0 0 / .65);
+		color: #fff;
+		font-size: .75rem;
+		font-variant-numeric: tabular-nums;
+	}
+	.info dd {
+		margin: 0;
 	}
 	.actions .pinned {
 		background: #8fb9ff;

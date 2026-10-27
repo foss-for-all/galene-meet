@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { autoplay, resume } from '../lib/autoplay.svelte';
+	import { pick } from '../lib/commands';
 	import { t, type Key } from '../lib/i18n.svelte';
 	import { REACTIONS, type Meeting } from '../lib/meeting.svelte';
 	import { support } from '../lib/support';
@@ -65,6 +66,14 @@
 		const ss = String(sec % 60).padStart(2, '0');
 		return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 	});
+
+	async function presentFile() {
+		if (meeting.playing) return meeting.stopFile();
+		const f = await pick('audio/*,video/*');
+		if (f) await meeting.presentFile(f);
+	}
+
+	const kb = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.ceil(n / 1024)} KB`);
 
 	async function copyLink() {
 		const room = (meeting.sc.group ?? '').replace(/^meet\//, '');
@@ -136,10 +145,40 @@
 	<div class="stage">
 		<Stage {meeting} {layout} />
 		<Reactions {meeting} />
+		{#if meeting.transfers.length}
+			<ul class="transfers">
+				{#each meeting.transfers as x (x.f.fullid())}
+					<li>
+						<Icon name="paperclip" />
+						<div>
+							<b>{x.f.name}</b>
+							<small>
+								{t(x.f.up ? 'file.to' : 'file.from', { name: x.f.username })} · {kb(x.f.size)}
+								{#if x.state === 'connected'}· {Math.round((100 * x.done) / Math.max(1, x.f.size))}%{/if}
+								· {t(`file.${x.state}` as 'file.done')}
+							</small>
+							{#if x.state === 'offered'}<small class="ip">{t('file.ip')}</small>{/if}
+						</div>
+						{#if x.state === 'offered'}
+							<button class="primary" onclick={() => x.f.receive()}>{t('file.accept')}</button>
+						{/if}
+						{#if x.state !== 'done' && x.state !== 'cancelled' && x.state !== 'closed'}
+							<button onclick={() => x.f.cancel()}>{t(x.f.up ? 'file.cancel' : 'file.reject')}</button>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		{/if}
 		{#if panel === 'chat'}
 			<Chat {meeting} />
 		{:else if panel === 'people'}
-			<People {meeting} />
+			<People
+				{meeting}
+				onmessage={id => {
+					meeting.dm = id;
+					panel = 'chat';
+				}}
+			/>
 		{/if}
 	</div>
 	<nav>
@@ -204,6 +243,14 @@
 				onclick={() => run(null, () => meeting.raiseHand())}
 			>
 				<Icon name="hand" />
+			</button>
+			<button
+				aria-pressed={meeting.playing}
+				aria-disabled={!!noPresent}
+				title={noPresent ? t(noPresent) : t(meeting.playing ? 'tb.stopFile' : 'tb.presentFile')}
+				onclick={() => run(noPresent, presentFile)}
+			>
+				<Icon name="film" />
 			</button>
 			<button title={t('tb.copyLink')} onclick={() => run(null, copyLink)}>
 				<Icon name="link" />
@@ -351,6 +398,51 @@
 		border-radius: 1.75rem;
 		background: #1f2229;
 		box-shadow: 0 .5rem 1.5rem rgb(0 0 0 / .4);
+	}
+	.transfers {
+		position: absolute;
+		right: 1rem;
+		bottom: 1rem;
+		z-index: 3;
+		width: min(22rem, calc(100% - 2rem));
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		display: grid;
+		gap: .5rem;
+	}
+	.transfers li {
+		display: flex;
+		align-items: center;
+		gap: .5rem;
+		padding: .625rem .75rem;
+		border-radius: .75rem;
+		background: #1f2229;
+		box-shadow: 0 .5rem 1.5rem rgb(0 0 0 / .4);
+	}
+	.transfers div {
+		flex: 1;
+		min-width: 0;
+		display: grid;
+	}
+	.transfers b {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: .875rem;
+	}
+	.transfers small {
+		color: #9aa0ad;
+		font-size: .75rem;
+	}
+	.transfers .ip {
+		color: #ffe08a;
+	}
+	.transfers button {
+		height: 2rem;
+		padding: 0 .625rem;
+		border-color: #3a3f4b;
+		font-size: .8125rem;
 	}
 	.level {
 		position: absolute;

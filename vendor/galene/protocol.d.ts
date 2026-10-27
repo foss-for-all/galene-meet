@@ -10,6 +10,24 @@ export type Credentials =
 	| { type: 'password'; password: string }
 	| { type: 'token'; token: string };
 
+export type TransferredFileState = '' | 'inviting' | 'connecting' | 'connected' | 'done' | 'cancelled' | 'closed';
+
+export class TransferredFile {
+	userid: string;
+	id: string;
+	up: boolean;
+	state: TransferredFileState;
+	username: string;
+	name: string;
+	mimetype: string;
+	size: number;
+	datalen: number;
+	onevent: ((this: TransferredFile, state: TransferredFileState, data: any) => void) | null;
+	fullid(): string;
+	receive(): Promise<void>;
+	cancel(message?: string): void;
+}
+
 export class ServerConnection {
 	id: string;
 	group: string | null;
@@ -19,9 +37,12 @@ export class ServerConnection {
 	up: Record<string, Stream>;
 	down: Record<string, Stream>;
 	permissions: string[];
+	rtcConfiguration: RTCConfiguration | null;
 	onconnected: ((this: ServerConnection) => void) | null;
 	onerror: ((this: ServerConnection, error: unknown) => void) | null;
 	onclose: ((this: ServerConnection, code: number, reason: string) => void) | null;
+	onpeerconnection: ((this: ServerConnection) => RTCConfiguration | null) | null;
+	onfiletransfer: ((this: ServerConnection, f: TransferredFile) => void) | null;
 	onuser: ((this: ServerConnection, id: string, kind: string) => void) | null;
 	onjoined:
 		| ((
@@ -64,6 +85,8 @@ export class ServerConnection {
 		  ) => void)
 		| null;
 	connect(url: string): void;
+	getRTCConfiguration(): RTCConfiguration;
+	sendFile(id: string, file: File): void;
 	close(): void;
 	join(group: string, username: string | null, credentials: Credentials, data?: Record<string, any>): Promise<void>;
 	leave(group: string): void;
@@ -95,5 +118,6 @@ export class Stream {
 	setStream(stream: MediaStream): void;
 	close(replace?: boolean): void;
 	request(what: string[]): void;
+	restartIce(): void;
 	setStatsInterval(ms: number): void;
 }

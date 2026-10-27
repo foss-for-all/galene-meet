@@ -9,6 +9,7 @@
 	let {
 		room = $bindable(),
 		member,
+		invited,
 		error,
 		busy,
 		onjoin,
@@ -18,6 +19,7 @@
 	}: {
 		room: string;
 		member: boolean;
+		invited: boolean;
 		error: string;
 		busy: boolean;
 		onjoin: (name: string, media: { cam: boolean; mic: boolean }) => void;
@@ -93,6 +95,7 @@
 		{:else}
 			<label for="name">{t('lobby.name')}</label>
 			<input id="name" bind:value={name} maxlength="64" autocomplete="nickname" />
+			{#if invited}<small class="invited">{t('lobby.invited')}</small>{/if}
 			<div class="row">
 				<button type="submit" value="login" class="primary" aria-disabled={!support.webrtc}>{t('lobby.login')}</button>
 				<button type="submit" value="guest" aria-disabled={!support.webrtc || busy}>{t('lobby.guest')}</button>
@@ -146,6 +149,10 @@
 		height: auto;
 		font-size: .875rem;
 		text-decoration: underline;
+	}
+	.invited {
+		color: var(--fg);
+		opacity: .75;
 	}
 	.unsupported {
 		padding: .75rem 1rem;

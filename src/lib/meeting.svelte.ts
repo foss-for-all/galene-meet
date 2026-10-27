@@ -2,7 +2,7 @@ import { analyse, type Level } from './audio';
 import { get as image } from './images';
 import { play } from './sounds.svelte';
 import { t, type Key } from './i18n.svelte';
-import { ServerConnection, type Credentials, type Stream } from '../../vendor/galene/protocol.js';
+import { ServerConnection, type Credentials, type Stream, type TransferredFile } from '../../vendor/galene/protocol.js';
 
 export type Tile = {
 	key: string;
@@ -17,12 +17,28 @@ export type Tile = {
 
 export type Message = {
 	key: string;
+	id?: string;
+	source?: string;
 	name: string;
 	time: Date;
 	text: string;
 	me: boolean;
 	mine: boolean;
 	private: boolean;
+	// Display name of the receiver of a private message we sent.
+	to?: string;
+	system?: boolean;
+};
+
+export type Token = {
+	token: string;
+	group?: string;
+	username?: string;
+	permissions?: string[];
+	expires?: string;
+	'not-before'?: string;
+	issuedBy?: string;
+	issuedAt?: string;
 };
 
 // Galene's autokick: refused on join, or kicked when the last operator leaves.
@@ -55,7 +71,9 @@ export type Reaction = (typeof REACTIONS)[number];
 export type Advanced = {
 	send: 'lowest' | 'low' | 'normal' | 'unlimited';
 	simulcast: 'auto' | 'on' | 'off';
-	receive: 'everything' | 'low' | 'screenshare' | 'audio';
+	receive: 'everything' | 'low' | 'screenshare' | 'audio' | 'nothing';
+	filter: 'none' | 'flip-h' | 'flip-v' | 'rotate';
+	forceRelay: boolean;
 	hqaudio: boolean;
 	processing: boolean;
 	blackboard: boolean;
@@ -66,6 +84,8 @@ const ADVANCED: Advanced = {
 	send: 'normal',
 	simulcast: 'auto',
 	receive: 'everything',
+	filter: 'none',
+	forceRelay: false,
 	hqaudio: false,
 	processing: true,
 	blackboard: false,
@@ -181,6 +201,8 @@ export class Meeting {
 		const sc = this.sc;
 		const bump = () => this.#v++;
 
+		sc.onpeerconnection = () => (this.adv.forceRelay ? { ...sc.rtcConfiguration, iceTransportPolicy: 'relay' } : null);
+		sc.onfiletransfer = f => this.#transfer(f);
 		sc.onconnected = () => sc.join(group, username, creds, name ? { name } : undefined);
 		sc.onjoined = (kind, _group, perms, status, _data, _error, message) => {
 			switch (kind) {
@@ -229,7 +251,9 @@ export class Meeting {
 			if (!history && source !== sc.id && this.#settled) play('chat');
 			this.messages.push({
 				key: id ?? crypto.randomUUID(),
-				name: this.#display(source, username),
+				id,
+				source,
+				name: source ? this.#display(source, username) : username || t('chat.server'),
 				time,
 				text: message,
 				me: kind === 'me',
@@ -255,9 +279,29 @@ export class Meeting {
 				this.notice = server(String(message));
 				break;
 			case 'warning':
-			case 'info':
-				this.notice = server(String(message));
+			case 'info': {
+				const from = source && source !== sc.id ? `${this.#display(source, username)}: ` : '';
+				this.notice = from + server(String(message));
 				break;
+			}
+			case 'token':
+				if (_error) this.local(`${t('invite.failed')}: ${message}`);
+				else {
+					this.invite = this.link((message as Token).token);
+					this.local(this.invite);
+				}
+				break;
+			case 'tokenlist':
+				this.tokens = _error ? [] : ((message as Token[]) ?? []);
+				if (this.#printTokens)
+					this.local(this.tokens.map(x => `${this.link(x.token)} ${x.username ?? ''} ${x.expires ?? ''}`).join('\n') || '-');
+				this.#printTokens = false;
+				break;
+			case 'userinfo': {
+				const m = message as { id: string; username?: string; address?: string };
+				this.local(t('people.identified', { name: this.#display(m.id, m.username ?? ''), address: m.address ?? '?' }));
+				break;
+			}
 			case 'mute':
 				this.#up('camera')?.stream?.getAudioTracks().forEach(t => (t.enabled = false));
 				this.mic = false;
@@ -267,9 +311,13 @@ export class Meeting {
 			case 'lowerhand':
 				if (this.hand) this.raiseHand();
 				break;
-			case 'clearchat':
-				this.messages = [];
+			case 'clearchat': {
+				const m = message as { id?: string; userId?: string } | null;
+				if (m?.id) this.messages = this.messages.filter(x => x.id !== m.id);
+				else if (m?.userId) this.messages = this.messages.filter(x => x.source !== m.userId);
+				else this.messages = [];
 				break;
+			}
 			}
 		};
 		sc.onerror = () => {
@@ -348,6 +396,8 @@ export class Meeting {
 
 	#request(): Record<string, string[]> {
 		switch (this.adv.receive) {
+		case 'nothing':
+			return { '': [] };
 		case 'audio':
 			return { '': ['audio'] };
 		case 'screenshare':
@@ -364,7 +414,8 @@ export class Meeting {
 		for (const s of Object.values(this.sc.down)) {
 			const share = s.label === 'screenshare';
 			const want =
-				mode === 'audio' || (mode === 'screenshare' && !share) ? ['audio']
+				mode === 'nothing' ? []
+				: mode === 'audio' || (mode === 'screenshare' && !share) ? ['audio']
 				: mode === 'low' ? ['audio', 'video-low']
 				: mode === 'screenshare' || all || s.id === main || share ? ['audio', 'video']
 				: ['audio', 'video-low'];
@@ -394,9 +445,203 @@ export class Meeting {
 		setTimeout(() => (this.reactions = this.reactions.filter(x => x !== r)), 4000);
 	}
 
-	send(text: string) {
-		if (text.startsWith('/me ')) this.sc.chat('me', '', text.slice(4));
-		else this.sc.chat('', '', text);
+	invite = $state('');
+	// Receiver of the chat input: '' for everyone or a user id.
+	dm = $state('');
+	tokens = $state<Token[]>([]);
+
+	link(token: string) {
+		const room = (this.sc.group ?? '').replace(/^meet\//, '');
+		return `${location.origin}/${room}?token=${encodeURIComponent(token)}`;
+	}
+
+	// A line only this client sees: command output and the like.
+	local(text: string) {
+		this.messages.push({ key: crypto.randomUUID(), name: '', time: new Date(), text, me: false, mine: false, private: false, system: true });
+	}
+
+	// Galene does not echo private messages, so they are added here.
+	send(text: string, dest = '') {
+		const me = text.startsWith('/me ');
+		const body = me ? text.slice(4) : text;
+		this.sc.chat(me ? 'me' : '', dest, body);
+		if (dest)
+			this.messages.push({
+				key: crypto.randomUUID(),
+				source: this.sc.id,
+				name: this.myName,
+				time: new Date(),
+				text: body,
+				me,
+				mine: true,
+				private: true,
+				to: this.#display(dest),
+			});
+	}
+
+	deleteMessage(id: string | undefined, userId: string) {
+		this.sc.groupAction('clearchat', id ? { id, userId } : { userId });
+	}
+
+	clearChat() {
+		this.sc.groupAction('clearchat');
+	}
+
+	makeInvite(o: { username?: string; expires: number; permissions: string[] }) {
+		const { username, ...rest } = o;
+		this.sc.groupAction('maketoken', { group: this.sc.group, ...rest, ...(username ? { username } : {}) });
+	}
+
+	editInvite(token: string, expires: number) {
+		this.sc.groupAction('edittoken', { token, expires });
+	}
+
+	#printTokens = false;
+
+	listInvites(print = false) {
+		this.#printTokens = print;
+		this.sc.groupAction('listtokens');
+	}
+
+	// Galene's default for invitations: what the inviter may do itself, minus op.
+	guestPerms() {
+		return ['present', 'message'].filter(p => this.perms.includes(p));
+	}
+
+	warn(text: string, id = '') {
+		this.sc.userMessage('warning', id, text);
+	}
+
+	subgroups() {
+		this.sc.groupAction('subgroups');
+	}
+
+	// Playback volume per participant, this browser only.
+	volumes = $state<Record<string, number>>({});
+
+	// A short summary of one stream's connection, from WebRTC stats.
+	async stats(key: string) {
+		const s = this.sc.down[key] ?? this.sc.up[key];
+		if (!s?.pc) return null;
+		const r = await s.pc.getStats();
+		let kbps = 0;
+		let fps = 0;
+		let lost = 0;
+		let packets = 0;
+		let rtt = 0;
+		let size = '';
+		let bytes = 0;
+		r.forEach((x: any) => {
+			if ((x.type === 'inbound-rtp' || x.type === 'outbound-rtp') && x.kind === 'video') {
+				bytes += x.bytesReceived ?? x.bytesSent ?? 0;
+				fps = Math.max(fps, x.framesPerSecond ?? 0);
+				if (x.frameWidth) size = `${x.frameWidth}x${x.frameHeight}`;
+				lost += x.packetsLost ?? 0;
+				packets += x.packetsReceived ?? x.packetsSent ?? 0;
+			}
+			if (x.type === 'candidate-pair' && x.nominated && x.currentRoundTripTime) rtt = x.currentRoundTripTime * 1000;
+		});
+		const prev = s.userdata.statsPrev as { t: number; bytes: number } | undefined;
+		const now = performance.now();
+		if (prev) kbps = ((bytes - prev.bytes) * 8) / (now - prev.t);
+		s.userdata.statsPrev = { t: now, bytes };
+		return { size, fps: Math.round(fps), kbps: Math.round(kbps), lost: packets ? (100 * lost) / (packets + lost) : 0, rtt: Math.round(rtt) };
+	}
+
+	transfers = $state<{ f: TransferredFile; state: string; done: number }[]>([]);
+
+	#transfer(f: TransferredFile) {
+		const entry = { f, state: f.up ? 'inviting' : 'offered', done: 0 };
+		this.transfers.push(entry);
+		const update = (state: string) => {
+			const i = this.transfers.findIndex(x => x.f === f);
+			if (i >= 0) this.transfers[i] = { f, state, done: f.datalen };
+		};
+		f.onevent = (state, data) => {
+			if (state === 'done' && !f.up) {
+				const a = document.createElement('a');
+				a.href = URL.createObjectURL(data);
+				a.download = f.name;
+				a.click();
+				setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+			}
+			if (state === 'cancelled' && data) this.notice = `${f.name}: ${data}`;
+			update(state);
+			if (state === 'done' || state === 'cancelled' || state === 'closed')
+				setTimeout(() => (this.transfers = this.transfers.filter(x => x.f !== f)), 5000);
+		};
+		if (!f.up) play('chat');
+	}
+
+	sendFile(id: string, file: File) {
+		try {
+			this.sc.sendFile(id, file);
+		} catch (e) {
+			this.#fail(e);
+		}
+	}
+
+	// Galene's /presentfile: plays a local audio or video file to everyone.
+	async presentFile(file: File) {
+		const video = document.createElement('video');
+		video.src = URL.createObjectURL(file);
+		video.playsInline = true;
+		const capture = (video as any).captureStream?.bind(video) ?? (video as any).mozCaptureStream?.bind(video);
+		if (!capture) return this.#fail(new Error(t('why.file')));
+		await video.play().catch(this.#fail);
+		const stream: MediaStream = capture();
+		if (this.mic) {
+			await this.toggleMic();
+			this.notice = t('notice.mutedForFile');
+		}
+		this.#publish('video', stream, undefined, () => {
+			video.pause();
+			URL.revokeObjectURL(video.src);
+			video.removeAttribute('src');
+		});
+		video.onended = () => this.#up('video')?.close();
+	}
+
+	stopFile() {
+		for (const s of Object.values(this.sc.up)) if (s.label === 'video') s.close();
+	}
+
+	playing = $derived.by(() => {
+		this.#v;
+		return Object.values(this.sc.up).some(s => s.label === 'video');
+	});
+
+	renegotiate() {
+		for (const s of [...Object.values(this.sc.up), ...Object.values(this.sc.down)]) s.restartIce();
+	}
+
+	// Galene's /relay-test: loops a data channel through the TURN server and reports the round trip.
+	async relayTest(): Promise<number> {
+		const conf: RTCConfiguration = { ...(this.sc.getRTCConfiguration() ?? {}), iceTransportPolicy: 'relay' };
+		const a = new RTCPeerConnection(conf);
+		const b = new RTCPeerConnection(conf);
+		a.onicecandidate = e => e.candidate && b.addIceCandidate(e.candidate);
+		b.onicecandidate = e => e.candidate && a.addIceCandidate(e.candidate);
+		try {
+			return await new Promise<number>(async (resolve, reject) => {
+				setTimeout(() => reject(new Error('timeout')), 5000);
+				const d = a.createDataChannel('relay-test');
+				d.onopen = () => d.send(String(Date.now()));
+				b.ondatachannel = e => (e.channel.onmessage = m => resolve(Date.now() - Number(m.data)));
+				await a.setLocalDescription(await a.createOffer());
+				await b.setRemoteDescription(a.localDescription!);
+				await b.setLocalDescription(await b.createAnswer());
+				await a.setRemoteDescription(b.localDescription!);
+			});
+		} finally {
+			a.close();
+			b.close();
+		}
+	}
+
+	find(name: string) {
+		const n = name.toLowerCase();
+		return this.people.find(p => p.name.toLowerCase() === n || p.account.toLowerCase() === n)?.id ?? null;
 	}
 
 	get left() {
@@ -419,7 +664,7 @@ export class Meeting {
 		this.sc.userAction('setdata', this.sc.id, { raisehand: this.hand ? null : true });
 	}
 
-	act(kind: 'mute' | 'kick' | 'op' | 'unop' | 'present' | 'unpresent', id: string) {
+	act(kind: 'mute' | 'kick' | 'op' | 'unop' | 'present' | 'unpresent' | 'shutup' | 'unshutup' | 'identify', id: string) {
 		if (kind === 'mute') this.sc.userMessage('mute', id);
 		else this.sc.userAction(kind, id);
 	}
@@ -567,6 +812,20 @@ export class Meeting {
 				if (!audio) return;
 			}
 		}
+		if (video && this.adv.filter !== 'none' && out.getVideoTracks().length) {
+			try {
+				const { applyFilter } = await import('./background');
+				const f = await applyFilter(out, this.adv.filter);
+				const inner = stop;
+				out = f.stream;
+				stop = () => {
+					f.stop();
+					inner ? inner() : drop();
+				};
+			} catch (e) {
+				this.#fail(e);
+			}
+		}
 		if (!this.#alive) {
 			stop?.();
 			return drop();
@@ -591,6 +850,14 @@ export class Meeting {
 		this.adv = { ...this.adv, ...o };
 		localStorage.setItem('meet-adv', JSON.stringify(this.adv));
 		if ('receive' in o) this.sc.request(this.#request());
+		if ('forceRelay' in o) {
+			const policy: RTCIceTransportPolicy = this.adv.forceRelay ? 'relay' : 'all';
+			for (const st of [...Object.values(this.sc.up), ...Object.values(this.sc.down)]) {
+				st.pc.setConfiguration({ ...st.pc.getConfiguration(), iceTransportPolicy: policy });
+				st.restartIce();
+			}
+			return;
+		}
 		if (!Object.keys(o).some(k => k !== 'receive' && k !== 'mirror')) return;
 		await this.#serial(async () => {
 			if (this.#up('camera')) await this.#camera(this.#audioLive(), this.cam);

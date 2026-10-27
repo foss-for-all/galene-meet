@@ -20,6 +20,8 @@
 	}
 
 	const params = new URLSearchParams(location.search);
+	// Invitation links made with Galene tokens: /<room>?token=...
+	const invite = params.get('token');
 	// Old portal links: /?room=<name>.
 	let room = $state(normalize(location.pathname === '/' && params.has('room') ? '/' + params.get('room') : location.pathname));
 	let member = $state(loggedIn() && canHost());
@@ -119,7 +121,8 @@
 		autoplay.blocked = false;
 		meeting = m;
 		try {
-			await m.open(GROUP + room, tok ? null : n, tok ? { type: 'token', token: tok } : { type: 'password', password: '' }, n);
+			const creds = tok ? { type: 'token' as const, token: tok } : invite ? { type: 'token' as const, token: invite } : { type: 'password' as const, password: '' };
+			await m.open(GROUP + room, tok ? null : n, creds, n);
 		} catch (e) {
 			if (g !== gen) return;
 			meeting = null;
@@ -147,6 +150,7 @@
 	<Lobby
 		bind:room
 		{member}
+		invited={!!invite}
 		{error}
 		{busy}
 		onjoin={join}

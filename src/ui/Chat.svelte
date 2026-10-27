@@ -1,9 +1,18 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import { command } from '../lib/commands';
 	import { t } from '../lib/i18n.svelte';
 	import type { Meeting } from '../lib/meeting.svelte';
+	import Icon from './Icon.svelte';
 
 	let { meeting }: { meeting: Meeting } = $props();
+
+	const op = $derived(meeting.perms.includes('op'));
+	const others = $derived(meeting.people.filter(p => !p.self));
+
+	$effect(() => {
+		if (meeting.dm && !others.some(p => p.id === meeting.dm)) meeting.dm = '';
+	});
 
 	let text = $state('');
 	let log: HTMLOListElement;
@@ -20,23 +29,43 @@
 			tick().then(() => log.scrollTo({ top: log.scrollHeight }));
 	});
 
-	function submit(e: SubmitEvent) {
+	async function submit(e: SubmitEvent) {
 		e.preventDefault();
-		const t = text.trim();
-		if (!t) return;
-		meeting.send(t);
+		const line = text.trim();
+		if (!line) return;
 		text = '';
+		if (await command(meeting, line)) return;
+		meeting.send(line.startsWith('//') ? line.slice(1) : line, meeting.dm);
+	}
+
+	function close(e: MouseEvent) {
+		(e.currentTarget as HTMLElement).closest('details')!.open = false;
 	}
 </script>
 
 <aside>
 	<ol bind:this={log}>
 		{#each meeting.messages as m (m.key)}
-			<li class:mine={m.mine} class:me={m.me}>
+			<li class:mine={m.mine} class:me={m.me} class:system={m.system} class:private={m.private}>
 				<header>
-					<b>{m.name}</b>
-					{#if m.private}<span>{t('chat.private')}</span>{/if}
+					{#if !m.system}<b>{m.name}</b>{/if}
+					{#if m.to}
+						<span>{t('chat.to', { name: m.to })}</span>
+					{:else if m.private && m.source}
+						<button class="reply" onclick={() => (meeting.dm = m.source ?? '')}>{t('chat.private')}</button>
+					{/if}
 					<time datetime={m.time.toISOString()}>{fmt.format(m.time)}</time>
+					{#if op && m.source && !m.system}
+						<details>
+							<summary title={t('people.manage')} aria-label={t('people.manage')}>...</summary>
+							<menu>
+								{#if m.id}
+									<li><button onclick={e => (close(e), meeting.deleteMessage(m.id, m.source!))}>{t('chat.delete')}</button></li>
+								{/if}
+								<li><button onclick={e => (close(e), meeting.deleteMessage(undefined, m.source!))}>{t('chat.deleteAll', { name: m.name })}</button></li>
+							</menu>
+						</details>
+					{/if}
 				</header>
 				<p>
 					{#each parts(m.text) as { p, link }}
@@ -47,7 +76,16 @@
 		{/each}
 	</ol>
 	<form onsubmit={submit}>
-		<input bind:value={text} placeholder={t('chat.placeholder')} aria-label={t('chat.placeholder')} autocomplete="off" />
+		<select bind:value={meeting.dm} aria-label={t('chat.recipient')} class:dm={!!meeting.dm}>
+			<option value="">{t('chat.everyone')}</option>
+			{#each others as p (p.id)}
+				<option value={p.id}>{t('chat.privateTo', { name: p.name })}</option>
+			{/each}
+		</select>
+		<div class="row">
+			<input bind:value={text} placeholder={t('chat.placeholder')} aria-label={t('chat.placeholder')} autocomplete="off" />
+			<button type="submit" title={t('chat.send')} aria-label={t('chat.send')}><Icon name="send" /></button>
+		</div>
 	</form>
 </aside>
 
@@ -97,12 +135,91 @@
 	a {
 		color: #8fb9ff;
 	}
+	.system p {
+		color: #9aa0ad;
+		font-family: 'IBM Plex Mono', ui-monospace, monospace;
+		font-size: .8125rem;
+	}
+	.private:not(.system) {
+		padding-left: .5rem;
+		border-left: 2px solid #c49bff;
+	}
+	.reply {
+		height: auto;
+		padding: 0;
+		border: none;
+		color: #c49bff;
+		font-size: .8125rem;
+		text-decoration: underline;
+	}
+	details {
+		position: relative;
+	}
+	summary {
+		list-style: none;
+		cursor: pointer;
+		padding: 0 .25rem;
+		color: #9aa0ad;
+	}
+	summary::-webkit-details-marker {
+		display: none;
+	}
+	menu {
+		position: absolute;
+		right: 0;
+		z-index: 3;
+		margin: .25rem 0 0;
+		padding: .25rem;
+		list-style: none;
+		border-radius: .5rem;
+		background: #2d313b;
+		box-shadow: 0 .5rem 1.5rem rgb(0 0 0 / .4);
+	}
+	menu button {
+		width: 100%;
+		height: 2.25rem;
+		border: none;
+		text-align: left;
+		white-space: nowrap;
+	}
+	menu button:hover {
+		background: #3a3f4b;
+	}
 	form {
+		display: grid;
+		gap: .5rem;
 		padding: .75rem;
 	}
+	.row {
+		display: flex;
+		gap: .375rem;
+	}
 	input {
-		width: 100%;
+		flex: 1;
+		min-width: 0;
+		font-size: 1rem;
 		border-color: #3a3f4b;
+	}
+	.row button {
+		display: grid;
+		place-items: center;
+		width: 2.75rem;
+		padding: 0;
+		border-color: #3a3f4b;
+	}
+	select {
+		font: inherit;
+		font-size: 1rem;
+		height: 2.25rem;
+		border-radius: .5rem;
+		border: 1px solid #3a3f4b;
+		padding: 0 .5rem;
+		background: #181a20;
+		color: inherit;
+	}
+	select.dm {
+		border-color: #c49bff;
+		color: #c49bff;
 	}
 	@media (max-width: 40rem) {
 		aside {

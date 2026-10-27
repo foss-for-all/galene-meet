@@ -186,3 +186,49 @@ export async function loadImage(file: Blob): Promise<string> {
 		r.readAsDataURL(blob);
 	});
 }
+
+// Galene's camera filters: mirror the outgoing video horizontally, vertically or both (rotate).
+export async function applyFilter(input: MediaStream, filter: 'flip-h' | 'flip-v' | 'rotate'): Promise<{ stream: MediaStream; stop: () => void }> {
+	const video = document.createElement('video');
+	video.muted = true;
+	video.playsInline = true;
+	video.srcObject = new MediaStream(input.getVideoTracks());
+	await video.play();
+	const ctx = document.createElement('canvas').getContext('2d')!;
+	const track = ctx.canvas.captureStream().getVideoTracks()[0];
+	const fx = filter !== 'flip-v';
+	const fy = filter !== 'flip-h';
+	let stopped = false;
+
+	const frame = () => {
+		const w = video.videoWidth;
+		const h = video.videoHeight;
+		if (!w || !h) return;
+		if (ctx.canvas.width !== w || ctx.canvas.height !== h) {
+			ctx.canvas.width = w;
+			ctx.canvas.height = h;
+		}
+		ctx.setTransform(fx ? -1 : 1, 0, 0, fy ? -1 : 1, fx ? w : 0, fy ? h : 0);
+		ctx.drawImage(video, 0, 0, w, h);
+	};
+	const loop = () => {
+		if (stopped) return;
+		frame();
+		video.requestVideoFrameCallback(loop);
+	};
+	video.requestVideoFrameCallback(loop);
+	const ticker = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 33)'])));
+	ticker.onmessage = () => {
+		if (document.hidden && !stopped) frame();
+	};
+
+	return {
+		stream: new MediaStream([track, ...input.getAudioTracks()]),
+		stop() {
+			stopped = true;
+			ticker.terminate();
+			track.stop();
+			video.srcObject = null;
+		},
+	};
+}
